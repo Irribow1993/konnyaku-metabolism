@@ -1,0 +1,247 @@
+{
+ "fresh": {
+  "saveVersion": 1,
+  "dataVersion": 1,
+  "layer": "macro",
+  "t": 0,
+  "amounts": {
+   "glc": 0,
+   "atp": 80,
+   "adp": 20,
+   "nad": 200,
+   "nadh": 0,
+   "tp": 0,
+   "pyr": 0
+  },
+  "levels": {
+   "glut": 0,
+   "prep": 0,
+   "pay": 0,
+   "work": 0,
+   "nadsalv": 0
+  },
+  "rp": 0,
+  "totals": {
+   "pyrProduced": 0,
+   "glcSupplied": 0,
+   "glcConsumed": 0,
+   "atpHydrolyzed": 0,
+   "nadAdded": 0,
+   "rpEarned": 0
+  },
+  "extAdded": {},
+  "milestones": {},
+  "log": [],
+  "lastSaved": 1791996307836
+ },
+ "midPlay": {
+  "saveVersion": 1,
+  "dataVersion": 1,
+  "layer": "macro",
+  "t": 120,
+  "amounts": {
+   "glc": 252.25223730822486,
+   "atp": 75.14684613387976,
+   "adp": 24.853153866120206,
+   "nad": 136.5928923176483,
+   "nadh": 63.407107682351494,
+   "tp": 24.088417701159994,
+   "pyr": 63.407107682351494
+  },
+  "levels": {
+   "glut": 2,
+   "prep": 0,
+   "pay": 0,
+   "work": 0,
+   "nadsalv": 0
+  },
+  "rp": 44.17184384731162,
+  "totals": {
+   "pyrProduced": 63.407107682351494,
+   "glcSupplied": 296.0000000000093,
+   "glcConsumed": 43.74776269175577,
+   "atpHydrolyzed": 44.17184384731162,
+   "nadAdded": 0,
+   "rpEarned": 44.17184384731162
+  },
+  "extAdded": {},
+  "milestones": {
+   "first_pyr": 6
+  },
+  "log": [
+   {
+    "t": 6,
+    "text": "初めてピルビン酸を検出した。"
+   }
+  ],
+  "lastSaved": 1791996307892
+ },
+ "nadStall": {
+  "saveVersion": 1,
+  "dataVersion": 1,
+  "layer": "macro",
+  "t": 900,
+  "amounts": {
+   "glc": 353.78700060332926,
+   "atp": 4.066749842760452e-10,
+   "adp": 99.99999999959354,
+   "nad": 4.317496964740807e-14,
+   "nadh": 199.99999999999642,
+   "tp": 92.42599879333775,
+   "pyr": 199.99999999999642
+  },
+  "levels": {
+   "glut": 0,
+   "prep": 0,
+   "pay": 0,
+   "work": 0,
+   "nadsalv": 0
+  },
+  "rp": 187.5740012062563,
+  "totals": {
+   "pyrProduced": 199.99999999999642,
+   "glcSupplied": 500,
+   "glcConsumed": 146.21299939666974,
+   "atpHydrolyzed": 187.5740012062563,
+   "nadAdded": 0,
+   "rpEarned": 187.5740012062563
+  },
+  "extAdded": {},
+  "milestones": {
+   "first_pyr": 6,
+   "pyr_100": 184,
+   "nad_low": 353,
+   "atp_trap": 549
+  },
+  "log": [
+   {
+    "t": 549,
+    "text": "ATP が尽き、準備期が始動できない。解糖系は最初に ATP を「投資」する経路だ。"
+   },
+   {
+    "t": 353,
+    "text": "NAD⁺ が減少している。NADH を NAD⁺ に戻す経路は、まだ解放されていない。"
+   },
+   {
+    "t": 184,
+    "text": "ピルビン酸 100 u。ピルビン酸の行き先は、まだ解放されていない。"
+   },
+   {
+    "t": 6,
+    "text": "初めてピルビン酸を検出した。"
+   }
+  ],
+  "lastSaved": 1791996308131
+ },
+ "afterPurchase": {
+  "saveVersion": 1,
+  "dataVersion": 1,
+  "layer": "macro",
+  "t": 660,
+  "amounts": {
+   "glc": 343.362680009718,
+   "atp": 78.83425760397076,
+   "adp": 21.165742396027735,
+   "nad": 41.16201800688808,
+   "nadh": 258.8379819931117,
+   "tp": 54.43665798744697,
+   "pyr": 258.8379819931117
+  },
+  "levels": {
+   "glut": 0,
+   "prep": 0,
+   "pay": 1,
+   "work": 0,
+   "nadsalv": 1
+  },
+  "rp": 270.56706640169284,
+  "totals": {
+   "pyrProduced": 258.8379819931117,
+   "glcSupplied": 500,
+   "glcConsumed": 156.63731999027982,
+   "atpHydrolyzed": 205.56706640169355,
+   "nadAdded": 100,
+   "rpEarned": 205.56706640169355
+  },
+  "extAdded": {
+   "nad": 100
+  },
+  "milestones": {
+   "first_pyr": 6,
+   "pyr_100": 184,
+   "nad_low": 353,
+   "atp_trap": 549
+  },
+  "log": [
+   {
+    "t": 549,
+    "text": "ATP が尽き、準備期が始動できない。解糖系は最初に ATP を「投資」する経路だ。"
+   },
+   {
+    "t": 353,
+    "text": "NAD⁺ が減少している。NADH を NAD⁺ に戻す経路は、まだ解放されていない。"
+   },
+   {
+    "t": 184,
+    "text": "ピルビン酸 100 u。ピルビン酸の行き先は、まだ解放されていない。"
+   },
+   {
+    "t": 6,
+    "text": "初めてピルビン酸を検出した。"
+   }
+  ],
+  "lastSaved": 1791996308266
+ },
+ "afterNewCulture": {
+  "saveVersion": 1,
+  "dataVersion": 1,
+  "layer": "macro",
+  "t": 330,
+  "amounts": {
+   "glc": 38.80958196182692,
+   "atp": 67.72279306605937,
+   "adp": 32.27720693394058,
+   "nad": 189.39690694516557,
+   "nadh": 10.603093054834723,
+   "tp": 11.77774302151144,
+   "pyr": 10.603093054834723
+  },
+  "levels": {
+   "glut": 0,
+   "prep": 0,
+   "pay": 0,
+   "work": 0,
+   "nadsalv": 0
+  },
+  "rp": 124.36906976983752,
+  "totals": {
+   "pyrProduced": 167.41193971904855,
+   "glcSupplied": 350,
+   "glcConsumed": 108.55508309505475,
+   "atpHydrolyzed": 124.36906976983752,
+   "nadAdded": 0,
+   "rpEarned": 124.36906976983752,
+   "cultures": 1
+  },
+  "extAdded": {},
+  "milestones": {
+   "first_pyr": 6,
+   "pyr_100": 186
+  },
+  "log": [
+   {
+    "t": 300,
+    "text": "新しい細胞で観察を再開した（研究成果は保持）。"
+   },
+   {
+    "t": 186,
+    "text": "ピルビン酸 100 u。ピルビン酸の行き先は、まだ解放されていない。"
+   },
+   {
+    "t": 6,
+    "text": "初めてピルビン酸を検出した。"
+   }
+  ],
+  "lastSaved": 1791996308337
+ }
+}

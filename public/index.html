@@ -1,0 +1,232 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#17191c">
+<meta name="description" content="細胞の解糖系を動かし、研究を重ねて代謝のしくみを一つずつ明らかにしていく、生化学がテーマのインクリメンタルゲーム。">
+<meta name="color-scheme" content="dark">
+<title>METABOLISM — 代謝のインクリメンタルゲーム</title>
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<noscript><p class="noscript">METABOLISM を遊ぶには、ブラウザの JavaScript を有効にしてください。</p></noscript>
+<header class="top">
+  <div class="bar">
+    <span class="brand">METABOLISM</span>
+    <span class="proto" id="ver">v0.1.0</span>
+    <button type="button" class="help" id="btn-help" aria-label="遊び方とこのゲームについて">?</button>
+    <span class="sp"></span>
+    <button class="rp-pill" id="rp-pill" type="button" data-tab="research">
+      <span class="rp-long">研究ポイント</span><span class="rp-short">RP</span><b id="hud-rp">0</b>
+    </button>
+  </div>
+  <div class="goal" id="goal">
+    <div class="goal-text"><span class="goal-tag">次の目標</span><span id="goal-text"></span></div>
+    <div class="goal-hint" id="goal-hint"></div>
+    <div class="goal-bar"><i id="goal-bar"></i></div>
+  </div>
+</header>
+
+<main>
+  <!-- ===== 細胞 ===== -->
+  <section class="tab" id="tab-cell">
+    <button type="button" class="env" id="env" data-term="anaerobic"><span>ENVIRONMENT</span>ANAEROBIC<em>嫌気的条件 ⓘ</em></button>
+    <div class="status" id="status"><span class="dot"></span><span id="status-text"></span></div>
+    <div class="stall" id="stall">
+      <p id="stall-text"></p>
+      <div class="stall-actions">
+        <button type="button" id="btn-stall-nad"></button>
+        <button type="button" id="btn-culture">新しい細胞で再開</button>
+      </div>
+      <p class="stall-note"><span class="term" data-term="cellloop">新しい細胞</span>にしても、研究と研究ポイントはそのまま残ります。NAD⁺ も補充の価格も最初の状態に戻ります。</p>
+    </div>
+
+    <div class="viewswitch" id="viewswitch" hidden>
+      <button type="button" data-view="macro" class="on">全体</button>
+      <button type="button" data-view="micro">内部（10の酵素）</button>
+      <span class="term vs-help" data-term="micro">ⓘ</span>
+    </div>
+
+    <div class="diagram" id="view-macro">
+      <svg id="flow" viewBox="0 0 320 384" role="img" aria-label="解糖系の流れ"></svg>
+    </div>
+
+    <div class="micro" id="view-micro" hidden>
+      <div class="legend">
+        <span class="badge-irrev term" data-term="irrev">不可逆</span>
+        <span class="badge-rev term" data-term="rev">可逆</span>
+        <span class="badge-reg term" data-term="reg">調節（実在）</span>
+        <span class="badge-anz term" data-term="analysis">解析・同定</span>
+        <span class="badge-tr term" data-term="transporter" id="legend-tr" hidden>輸送体</span>
+        <span class="legend-note">酵素をタップすると詳しい説明</span>
+      </div>
+      <ol class="chain" id="chain"></ol>
+    </div>
+
+    <div class="gauges">
+      <div class="gauge">
+        <div class="g-head"><span class="term" data-term="atp">エネルギー（ATP）</span><span id="g-atp-v"></span></div>
+        <div class="g-bar atp"><i id="g-atp"></i></div>
+        <div class="g-foot"><span>ATP <b id="g-atp-n"></b></span><span>ADP <b id="g-adp-n"></b></span></div>
+      </div>
+      <div class="gauge">
+        <div class="g-head"><span class="term" data-term="nad">電子の運搬車（NAD⁺）</span><span id="g-nad-v"></span></div>
+        <div class="g-bar nad"><i id="g-nad"></i></div>
+        <div class="g-foot"><span>空 NAD⁺ <b id="g-nad-n"></b></span><span>満載 NADH <b id="g-nadh-n"></b></span></div>
+      </div>
+    </div>
+
+    <div class="regen" id="regen" hidden>
+      <div class="rg-head"><span class="term" data-term="nadcycle">NAD⁺ の循環</span><span id="rg-off" class="rg-off" hidden>LDH 一時停止中</span></div>
+      <div class="rg-row"><span class="rg-k">NAD⁺ → NADH</span><span class="rg-who">GAPDH（解糖系）</span><b id="rg-use">0</b><small>/秒</small></div>
+      <div class="rg-row back"><span class="rg-k">NADH → NAD⁺</span><span class="rg-who">LDH（乳酸の生成）</span><b id="rg-back">0</b><small>/秒</small></div>
+      <div class="rg-foot"><span>外部からの補充なし <b id="rg-time">0:00</b></span><span>LDH 獲得後の補充 <b id="rg-refill">0</b> 回</span></div>
+    </div>
+
+    <!-- 0.4：乳酸の出入りと、細胞の外（予告） -->
+    <div class="lacpanel" id="lacpanel" hidden>
+      <div class="rg-head"><span class="term" data-term="lacbal">乳酸の出入り</span><span id="lp-off" class="rg-off" hidden>MCT 一時停止中</span></div>
+      <div class="lp-grid">
+        <span>細胞の中の乳酸</span><b id="lp-in">0</b><small></small>
+        <span>生成（LDH）</span><b id="lp-make">0</b><small>/秒</small>
+        <span class="mct-only" id="lp-exp-k">排出（MCT）</span><b class="mct-only" id="lp-exp">0</b><small class="mct-only">/秒</small>
+        <span class="mct-only">累積の排出</span><b class="mct-only" id="lp-cum">0</b><small class="mct-only"></small>
+      </div>
+      <div class="lp-hint" id="lp-hint"></div>
+      <div class="lp-unit"><span class="term" data-term="unit">量の単位 u</span>はゲーム独自の単位で、実際の細胞内の乳酸濃度を表すものではありません。</div>
+      <div class="extra" id="extra" hidden>
+        <div class="membrane" aria-hidden="true"><span class="mb-label">細胞膜</span><span class="mb-line"></span><span class="mb-dots" id="mb-dots"><i></i><i></i><i></i></span><span class="mb-tag">MCT</span></div>
+        <button type="button" class="ex-head term" data-term="extracellular"><b>EXTRACELLULAR</b><span>細胞外 ⓘ</span></button>
+        <div class="lp-grid ex">
+          <span>細胞のすぐ外の乳酸</span><b id="ex-lac">0</b><small></small>
+          <span>周りへ運び去られた累計</span><b id="ex-gone">0</b><small></small>
+        </div>
+        <p class="ex-lock">細胞外環境・細胞間代謝 ― 今後のアップデートで解放予定</p>
+      </div>
+    </div>
+
+    <div class="earn">ピルビン酸の生成 → <span class="term" data-term="rp">研究ポイント</span> <b id="earn-rate">0</b> /秒</div>
+
+  </section>
+
+  <!-- ===== 研究 ===== -->
+  <section class="tab" id="tab-research" hidden>
+    <p class="lead">研究ポイントで細胞を強化します。強化できるのは<b>速さ</b>だけ。グルコース1個からとれる ATP の数も、反応がつり合う点（平衡）も変わりません。</p>
+    <div class="nowcell">いまの細胞：グルコース <b id="now-glc">0</b> /秒 → ピルビン酸 <b id="now-pyr">0</b> /秒 → <span class="term" data-term="rp">研究ポイント</span> <b id="now-rp">0</b> /秒</div>
+    <h3 class="sec">解糖系の全体</h3>
+    <div id="upgrades"></div>
+    <h3 class="sec">解析</h3>
+    <div id="upgrades-obs"></div>
+    <h3 class="sec" id="enz-head" hidden>酵素（解析で同定。Lv2 から速さ +50%） <span class="term" data-term="analysis">ⓘ</span></h3>
+    <div id="upgrades-enz"></div>
+    <h3 class="sec" id="regen-head" hidden>NAD⁺ の再生 <span class="term" data-term="nadregen">ⓘ</span></h3>
+    <div id="upgrades-regen"></div>
+    <h3 class="sec" id="tr-head" hidden>細胞膜の輸送（輸送体） <span class="term" data-term="transporter">ⓘ</span></h3>
+    <div id="upgrades-tr"></div>
+  </section>
+
+  <!-- ===== 記録 ===== -->
+  <section class="tab" id="tab-log" hidden>
+    <ol class="log" id="log"></ol>
+  </section>
+
+  <!-- ===== 詳細 ===== -->
+  <section class="tab" id="tab-detail" hidden>
+    <h3>このゲームについて</h3>
+    <div class="about-actions">
+      <button type="button" data-term="howto">遊び方</button>
+      <button type="button" data-term="simplify">このゲームの単純化</button>
+      <button type="button" data-term="saveinfo">保存について</button>
+    </div>
+    <p class="fine about-ver">METABOLISM <span id="about-ver">v0.1.0</span> ― 生化学がテーマのインクリメンタルゲーム。数値と進め方はゲーム用に単純化しています。</p>
+    <p class="lead">ここから下は研究者向けの数値です。ゲームを遊ぶだけなら見なくても大丈夫です。</p>
+    <h3>物質量と変化速度</h3>
+    <table class="res"><tbody id="res-body"></tbody></table>
+    <h3>収支の検算</h3>
+    <div class="check" id="check"></div>
+    <h3>表示の定義</h3>
+    <dl class="defs-list">
+      <dt>ATP の割合</dt>
+      <dd>ATP ÷（ATP＋ADP）。生化学の「アデニル酸エネルギーチャージ」〔(ATP＋½ADP) ÷ (ATP＋ADP＋AMP)〕とは別の値です。このゲームには AMP がありません。</dd>
+      <dt>NAD⁺ の割合</dt>
+      <dd>NAD⁺ ÷（NAD⁺＋NADH）。</dd>
+      <dt>準備期・回収期の速さ（○/秒）</dt>
+      <dd>準備期は「グルコース ○/秒」＝ ヘキソキナーゼでグルコースが取り込まれる速さ（入口）。回収期は「ピルビン酸 ○/秒」＝ ピルビン酸キナーゼでピルビン酸ができる速さ（出口）。グルコース1分子からピルビン酸2分子ができるので、定常状態では回収期の値が準備期のちょうど2倍になります。中間体が増減しているときは、この関係から外れます。図の ATP・NAD⁺ の個数は、グルコース1個あたりです。</dd>
+      <dt>全体表示の物質</dt>
+      <dd>準備期の中間体 ＝ G6P＋F6P＋F1,6BP（炭素6個）、三炭糖リン酸 ＝ GAP＋DHAP、回収期の中間体 ＝ 1,3-BPG＋3PG＋2PG＋PEP（炭素3個）。内部表示と同じ計算結果を合計したものです。</dd>
+      <dt>量の単位 u と平衡定数</dt>
+      <dd>u はゲーム独自の単位で、実際の細胞内の濃度（乳酸など）を表すものではありません。1 u ＝ 0.1 mM は平衡定数の単位をそろえるための名目値です。平衡定数は教科書の ΔG°′ から計算し、無機リン酸 1 mM・pH 7 を一定として繰り込んでいます。ゲーム内の量は実際の細胞内濃度を再現していません。反応の速さ（Vmax・Km）はゲーム上の値です。</dd>
+    </dl>
+    <h3>反応の定義（計算している反応）</h3>
+    <pre class="defs" id="defs"></pre>
+    <h3>用語集</h3>
+    <div class="terms" id="terms"></div>
+    <h3>データ</h3>
+    <div class="data-actions">
+      <button type="button" id="btn-culture2">新しい細胞で再開</button>
+      <button type="button" id="btn-save">今すぐ保存</button>
+      <button type="button" id="btn-wipe" class="danger">すべて最初から</button>
+    </div>
+    <p class="fine">経過時間 <span id="hud-t"></span> ／ 進み具合はこのブラウザの中だけに自動保存されます（外部には送信しません）。</p>
+    <p class="fine" id="dbg-line" hidden></p>
+  </section>
+</main>
+
+<!-- 細胞タブ用の投与ボタン（親指の届く位置） -->
+<div class="feed" id="feed">
+  <button type="button" id="btn-glc"><span class="term-free">グルコースを入れる</span><b>＋10</b></button>
+</div>
+
+<nav class="tabs" role="tablist">
+  <button type="button" data-tab="cell" class="on"><span class="ic">◎</span>細胞</button>
+  <button type="button" data-tab="research"><span class="ic">△</span>研究<i class="badge" id="badge" hidden></i></button>
+  <button type="button" data-tab="log"><span class="ic">≡</span>記録<i class="badge" id="badge-log" hidden></i></button>
+  <button type="button" data-tab="detail"><span class="ic">⋯</span>詳細</button>
+</nav>
+
+<!-- 用語カード -->
+<div class="sheet-bg" id="sheet-bg" hidden></div>
+<div class="sheet" id="sheet" hidden>
+  <h4 id="sheet-title"></h4>
+  <p id="sheet-body"></p>
+  <button type="button" id="sheet-close">閉じる</button>
+</div>
+<div class="toast" id="toast"></div>
+
+<!-- 0.3：LDH の同定（大きな出来事） -->
+<div class="event" id="event" hidden role="dialog" aria-modal="true">
+  <div class="ev-card">
+    <div class="ev-tag">ENZYME IDENTIFIED</div>
+    <div class="ev-en" id="ev-en">LACTATE DEHYDROGENASE</div>
+    <div class="ev-ja" id="ev-ja">乳酸デヒドロゲナーゼ</div>
+    <div class="ev-eq"><span>Pyruvate + NADH</span><span class="ev-rev">⇄</span><span>Lactate + NAD⁺</span></div>
+    <p class="ev-line" id="ev-line">NADH を NAD⁺ へ戻す経路が見つかった。</p>
+    <p class="ev-note">正式な式は Pyruvate + NADH + H⁺ ⇄ Lactate + NAD⁺。この反応では ATP はできない。</p>
+    <button type="button" id="ev-go">細胞の NAD⁺ を見る</button>
+  </div>
+</div>
+
+<!-- 0.4：MCT の同定（細胞外への道） -->
+<div class="event ev-tr" id="event-mct" hidden role="dialog" aria-modal="true">
+  <div class="ev-card">
+    <div class="ev-tag">TRANSPORT SYSTEM UNLOCKED</div>
+    <h2 class="ev-big">細胞外への道が開かれた。</h2>
+    <div class="ev-ja">輸送体 MCT（モノカルボン酸輸送体）を同定した</div>
+    <div class="ev-mem" aria-hidden="true"><span class="in">INTRACELLULAR</span><span class="bar"><i></i><i></i><i></i></span><span class="out">EXTRACELLULAR</span></div>
+    <p class="ev-line">乳酸とH⁺を細胞膜の外へ運ぶ輸送経路が成立した。</p>
+    <p class="ev-line2">細胞内で完結していた代謝は、外部環境との物質交換へと広がっていく。</p>
+    <div class="ev-ext"><b>EXTRACELLULAR SPACE</b><span>細胞外環境・細胞間代謝</span><span>今後のアップデートで解放予定</span></div>
+    <p class="ev-note">MCT は ATP を使うポンプではなく、乳酸と H⁺ を共輸送する輸送体。正味の輸送方向は細胞内外の乳酸濃度と H⁺ 勾配によって決まり、どちら向きにも運ぶ。いまは細胞の中で乳酸がつくられ続けるので、外向きに運ばれる。</p>
+    <button type="button" id="ev-go-mct">細胞の外を見る</button>
+  </div>
+</div>
+
+<script src="js/data.js"></script>
+<script src="js/glossary.js"></script>
+<script src="js/sim.js"></script>
+<script src="js/aggregate.js"></script>
+<script src="js/ui.js"></script>
+</body>
+</html>
