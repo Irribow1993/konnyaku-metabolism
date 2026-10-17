@@ -374,3 +374,13 @@ h3.sec { font-family: var(--mono); font-size: 11px; letter-spacing: .2em; color:
 .credits dt { color: var(--dim); font-size: 11px; margin-top: 6px; }
 .credits dd { margin: 1px 0 0; }
 .credits a { color: var(--lit); }
+
+/* ===== v0.1.1：フォントをそろえる =====
+ * 等幅フォント（研究端末風）は、数字だけの表示とロゴ・版表示に限る。
+ * 英字のラベル（LDH・MCT・EXTRACELLULAR・ANAEROBIC など）や、日本語まじりの表示は本文のフォントにそろえる。
+ * 本文のフォントでも桁がそろうよう、数字は等幅の数字（tabular-nums）にする。 */
+body { font-variant-numeric: tabular-nums; }
+#flow .s-rate, .g-head span:last-child, .upg-lv, .upg-change, .upg button, #tab-detail h3, h3.sec, .check,
+.enz .no, .enz .rate, .env, #flow .lac-enz, .rg-k, .ev-tag, .ev-en, .ev-eq, #flow .ex-l, #flow .ex-v,
+.mb-tag, .ex-head b, .ev-mem, .ev-ext b, .help { font-family: var(--sans); }
+#flow .lac-enz.mct-l { text-anchor: start; }

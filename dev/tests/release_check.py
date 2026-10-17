@@ -40,7 +40,7 @@ async def main():
         print('[R1] 初回起動（公開時の画面）')
         ctx, pg = await ctx_page()
         await pg.goto(BASE); await pg.wait_for_timeout(900)
-        ok(await pg.title() == 'METABOLISM — 代謝のインクリメンタルゲーム' and (await pg.text_content('#ver')).strip() == 'v0.1.0', 'タイトルとバージョン v0.1.0')
+        ok(await pg.title() == 'METABOLISM — 代謝のインクリメンタルゲーム' and (await pg.text_content('#ver')).strip() == 'v0.1.1', 'タイトルとバージョン v0.1.1')
         ok(await pg.is_visible('#sheet') and '遊び方' in await pg.text_content('#sheet-title'), '初回は「遊び方」が自動で開く')
         body = await pg.text_content('#sheet-body')
         ok(all(k in body for k in ['グルコースを入れる', '研究ポイント', '次の目標', '新しい細胞で再開', '保存', '単純化']), '遊び方：基本の操作・タブ・保存・単純化への案内')
@@ -137,6 +137,12 @@ async def main():
               minBtn: Math.min(...[...document.querySelectorAll('nav.tabs button, #btn-glc')].map(e => e.getBoundingClientRect().height)) })""")
             ok(m['sw'] <= m['iw'] and m['bar'] <= 52 and m['pill']['height'] <= 36 and m['pill']['right'] <= m['iw'] and m['tabs']['bottom'] <= vp[1] + 1 and m['minBtn'] >= 40,
                f"{name}：横にはみ出さない（幅 {m['sw']}/{m['iw']}）、ヘッダ1行（{m['bar']:.0f}px・研究ポイントの表示 {m['pill']['height']:.0f}px）、下のタブと投与ボタンが画面内・押しやすい高さ（{m['minBtn']:.0f}px）")
+            gap = await pg.evaluate("""() => { const t = [...document.querySelectorAll('#flow .exzone text')].find(e => e.textContent === 'MCT');
+              const ln = document.querySelector('#flow .exzone line.flow'); if (!t || !ln) return null;
+              return t.getBBox().x - (+ln.getAttribute('x1') + 1.5); }""")
+            ok(gap is not None and gap >= 4, f"{name}：全体図の「MCT」の文字が矢印の線と重ならない（すき間 {gap and round(gap, 1)}）")
+            fam = await pg.evaluate("getComputedStyle([...document.querySelectorAll('#flow .exzone text')].find(e => e.textContent === 'MCT')).fontFamily")
+            ok('Hiragino' in fam or 'Noto Sans JP' in fam or 'BlinkMacSystemFont' in fam, f"{name}：英字のラベルは本文のフォント（{fam[:40]}…）")
             await shot(pg, 'R6_' + name)
             for t in ['research', 'detail']:
                 await pg.click(f'nav.tabs button[data-tab={t}]'); await pg.wait_for_timeout(250)

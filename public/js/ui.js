@@ -10,7 +10,7 @@
   const SAVE_KEY = 'metabolism.save.v1';      // 保存場所の名前（0.1 と共通。中身の版は saveVersion で管理）
   const VIEW_KEY = 'metabolism.view';
   const INTRO_KEY = 'metabolism.intro';       // v0.1.0：初回の「遊び方」を出したかどうか
-  const VERSION = 'v0.1.0';
+  const VERSION = 'v0.1.1';
   // 開発者向けの機能（画面テスト用の state の窓口、計算の健全性の表示）は ?debug のときだけ有効にする
   const DEBUG = /(^|[?&])debug(=|&|$)/.test(location.search.slice(1));
   const TICK_MS = 100;
@@ -217,7 +217,7 @@
     el('line', { x1: 276, y1: 382, x2: 276, y2: 462, class: 'pipe' }, ex);
     const efl = el('line', { x1: 276, y1: 382, x2: 276, y2: 462, class: 'flow lacflow' }, ex);
     const ehd = el('path', { d: 'M269,460 L283,460 L276,470 Z', class: 'head lachead' }, ex);
-    el('text', { x: 284, y: 412, class: 'lac-enz', 'text-anchor': 'start' }, ex, 'MCT');
+    el('text', { x: 286, y: 412, class: 'lac-enz mct-l' }, ex, 'MCT');   // v0.1.1：CSS の中央寄せで矢印の線（x=276）に重なっていたので、左寄せ（.mct-l）にして線の右に置く
     const elab = el('text', { x: 152, y: 458, class: 'ex-l' }, ex, 'EXTRACELLULAR');
     elab.setAttribute('data-term', 'extracellular');
     const eval_ = el('text', { x: 152, y: 474, class: 'ex-v', 'text-anchor': 'start' }, ex, '');

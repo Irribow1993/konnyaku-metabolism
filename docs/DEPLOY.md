@@ -4,7 +4,7 @@ METABOLISM はビルド不要の静的サイトです。`public/` フォルダ�
 
 ## 0. 公開前に決めること
 - [x] 作者名・連絡先・ライセンス（決定済み：こんにゃくお爺さん／note のプロフィール／プログラム GPL-3.0・解説文は CC BY-NC-SA 4.0。[作者名とライセンスの決定.md](作者名とライセンスの決定.md)）
-- [ ] `python3 dev/tools/verify_manifest.py` で、公開用ビルドが固定した最終候補のままか確認
+- [ ] `python3 dev/tools/verify_manifest.py` で、公開用ビルドが記録した版のままか確認
 - [x] リポジトリは**公開（Public）**にする（決定済み）。作る前に GitHub の設定 →「Emails」→「Keep my email addresses private」を有効にし、コミットに個人のメールアドレスが残らないようにする
 - [ ] サイトの名前（`<名前>.pages.dev` になる。例：metabolism-game）
 
@@ -42,7 +42,7 @@ METABOLISM はビルド不要の静的サイトです。`public/` フォルダ�
 ## 3. 公開後の確認（チェックリスト）
 
 > 最新のチェックリストは [RELEASE_CHECKLIST.md](RELEASE_CHECKLIST.md)（実機確認の表・公開直後・公開後しばらく・不具合の記録）。下は要約。
-- [ ] `https://<名前>.pages.dev` が開き、タイトルが「METABOLISM — 代謝のインクリメンタルゲーム」、ヘッダに「v0.1.0」
+- [ ] `https://<名前>.pages.dev` が開き、タイトルが「METABOLISM — 代謝のインクリメンタルゲーム」、ヘッダに「v0.1.1」
 - [ ] 初回に「遊び方」が開く。2回目からは開かない
 - [ ] ブラウザの開発者ツール →「ネットワーク」で、読み込みが自サイトのファイルだけ（index.html・css・js 5つ・favicon.svg）
 - [ ] 開発者ツール →「コンソール」にエラー（CSP 違反を含む）がない

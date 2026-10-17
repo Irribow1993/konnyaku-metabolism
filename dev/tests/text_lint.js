@@ -136,13 +136,13 @@ console.log('[2d] Prototype 0.4（MCT・細胞の外）');
   ok(/嫌気的条件/.test(G.anaerobic.title + G.anaerobic.body) && MB.ENVIRONMENT.id === 'anaerobic' && !MB.ENVIRONMENT.mitochondria, '§8：嫌気的条件は変更しない');
 }
 
-console.log('[2e] v0.1.0 公開版');
+console.log('[2e] v0.1.0 公開版（v0.1.1 で版を更新）');
 {
   const pub = path.join(__dirname, '..', '..', 'public');
   const shownTexts = texts.filter(([w]) => !/^REACTIONS/.test(w) && w !== 'ui.js' && w !== 'index.html').map(t => t[1]).join('\n');
   const htmlBody = html.replace(/<!--[\s\S]*?-->/g, '');
   ok(!/Prototype|プロトタイプ/.test(shownTexts) && !/Prototype/.test(htmlBody), '画面に出る文言に「Prototype」が残っていない（開発中の版の呼び名）');
-  ok(/id="ver">v0\.1\.0</.test(html) && /const VERSION = 'v0\.1\.0'/.test(ui) && /<title>METABOLISM — 代謝のインクリメンタルゲーム<\/title>/.test(html), 'タイトルとバージョン v0.1.0');
+  ok(/id="ver">v0\.1\.1</.test(html) && /id="about-ver">v0\.1\.1</.test(html) && /const VERSION = 'v0\.1\.1'/.test(ui) && /<title>METABOLISM — 代謝のインクリメンタルゲーム<\/title>/.test(html), 'タイトルとバージョン v0.1.1');
   ok(G.howto && G.simplify && G.saveinfo && /data-term="howto"/.test(html) && /btn-help/.test(html) && /openTerm\('howto'\)/.test(ui), '遊び方・このゲームの単純化・保存についての説明があり、「?」ボタンと詳細タブから開ける');
   ok(/量の単位 u はゲーム独自の単位/.test(G.simplify.body) && /嫌気的条件/.test(G.simplify.body) && /解析・同定/.test(G.simplify.body) && /ゲーム上の仕組み/.test(G.simplify.body), '単純化の注記：単位・嫌気的条件・解析と同定・ゲーム上の仕組み');
   ok(/if \(DEBUG\) window\.__METABOLISM_DEBUG__/.test(ui) && !/^\s*window\.__METABOLISM_DEBUG__/m.test(ui) && /if \(DEBUG\) \{ \$\('dbg-line'\)/.test(ui), '開発者向けの窓口（state の公開）と計算の健全性の表示は ?debug のときだけ');
@@ -158,6 +158,15 @@ console.log('[2e] v0.1.0 公開版');
   const hdr = fs.readFileSync(path.join(pub, '_headers'), 'utf8');
   ok(/Content-Security-Policy: default-src 'none'; script-src 'self'/.test(hdr) && /connect-src 'none'/.test(hdr) && /frame-ancestors 'none'/.test(hdr), 'Cloudflare Pages の _headers に CSP（自サイトのみ・通信なし・埋め込み禁止）');
   ok((ui.match(/localStorage\.(getItem|setItem|removeItem)\('?([A-Z_]+)/g) || []).every(x => /SAVE_KEY|VIEW_KEY|INTRO_KEY/.test(x)), 'localStorage に保存するのは、セーブ・表示の切り替え・初回の案内の3つだけ');
+}
+
+console.log('[2f] v0.1.1：フォント');
+{
+  const css = fs.readFileSync(path.join(__dirname, '..', '..', 'public', 'css/style.css'), 'utf8');
+  const last = css.slice(css.indexOf('v0.1.1：フォントをそろえる'));
+  ok(/font-variant-numeric: tabular-nums/.test(last) && ['#flow .lac-enz', '#flow .ex-l', '.env', '.ev-en', '.rg-k', '#flow .s-rate', '.upg button'].every(sel => last.includes(sel)) && /font-family: var\(--sans\)/.test(last),
+    '英字のラベル（LDH・MCT・EXTRACELLULAR・ANAEROBIC など）と日本語まじりの表示は本文のフォント。数字は等幅の数字（tabular-nums）');
+  ok(/x: 286, y: 412, class: 'lac-enz mct-l'/.test(ui) && /#flow \.lac-enz\.mct-l \{ text-anchor: start; \}/.test(css), '全体図の「MCT」の文字を左寄せにして、矢印の線の右に置いた（中央寄せで線に重なっていた）');
 }
 
 console.log('[3] 参照の整合性');
