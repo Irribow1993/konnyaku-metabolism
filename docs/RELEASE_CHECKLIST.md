@@ -1,6 +1,6 @@
 # 公開チェックリスト（METABOLISM v0.1.0）
 
-公開用ビルド：**v0.1.0 最終候補（RC1）として固定**。`public/` の各ファイルの SHA-256 は `docs/MANIFEST_v0.1.0.sha256` に記録してあります。
+公開用ビルド：**v0.1.0 最終候補（RC2）として固定**。`public/` の各ファイルの SHA-256 は `docs/MANIFEST_v0.1.0.sha256` に記録してあります。
 公開前・公開後に `python3 dev/tools/verify_manifest.py` を実行し、「すべて一致」になることを確認してください（ファイルが意図せず変わっていないことの確認）。
 
 > この版では、新機能・ゲームバランスの変更は行いません。チェックで不具合が見つかった場合は、内容と影響を記録して判断します（下の「不具合の記録」）。
@@ -12,6 +12,7 @@
 - [ ] `python3 dev/tools/verify_manifest.py` → すべて一致
 - [ ] （任意）自動テスト：`node dev/tests/run_tests.js`・`node dev/tests/text_lint.js` → すべて成功
 - [ ] GitHub の「Keep my email addresses private」を有効にした（コミットに個人のメールアドレスを残さない）
+- [ ] リポジトリを **Public** で作成し、トップに README・LICENSE が表示される（GitHub が「GPL-3.0 license」と認識している）
 
 ## B. 実機での確認（公開前に `public/index.html` を直接開くか、プレビュー URL で）
 各端末で、次の操作をして ✓ を付けます。
@@ -33,12 +34,14 @@
 
 ## C. 公開直後（`https://<名前>.pages.dev`）
 - [ ] ページが開き、タイトル「METABOLISM — 代謝のインクリメンタルゲーム」、ヘッダに「v0.1.0」
+- [ ] `https://<名前>.pages.dev/LICENSE.txt` で GPL-3.0 の全文が出る（トップ画面が出る場合は、古い版のファイルが登録されている）
 - [ ] 初回に「遊び方」が開く。再読み込みすると開かない
 - [ ] 開発者ツール →「ネットワーク」：読み込みが自サイトのファイルだけ（index.html・style.css・js 5つ・favicon.svg）
 - [ ] 開発者ツール →「コンソール」：エラー（CSP 違反を含む）がない
 - [ ] `curl -I https://<名前>.pages.dev/` で `Content-Security-Policy`・`X-Content-Type-Options`・`X-Frame-Options`・`Referrer-Policy`・`Permissions-Policy` が付いている
-- [ ] `https://<名前>.pages.dev/_headers` が 404（設定ファイルは配信されない）
+- [ ] `https://<名前>.pages.dev/_headers` を開くと、設定ファイルの中身ではなくゲームのトップ画面が出る（Cloudflare Pages は 404.html がないとき、存在しない住所にトップページを返す。設定ファイルは配信されない）
 - [ ] `https://<名前>.pages.dev/?debug=1` 以外では、詳細タブに「計算の健全性」が出ない
+- [ ] 詳細タブ「このゲームについて」に作者・ライセンスが出る。「GNU General Public License v3.0」で LICENSE.txt が、「CC BY-NC-SA 4.0」で説明ページが、note のリンクでプロフィールが開く
 - [ ] スマートフォン実機で B の 1〜3・8 をもう一度
 
 ## D. 公開後しばらく（1日〜1週間）

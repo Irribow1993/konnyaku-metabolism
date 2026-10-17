@@ -147,7 +147,13 @@ console.log('[2e] v0.1.0 公開版');
   ok(/量の単位 u はゲーム独自の単位/.test(G.simplify.body) && /嫌気的条件/.test(G.simplify.body) && /解析・同定/.test(G.simplify.body) && /ゲーム上の仕組み/.test(G.simplify.body), '単純化の注記：単位・嫌気的条件・解析と同定・ゲーム上の仕組み');
   ok(/if \(DEBUG\) window\.__METABOLISM_DEBUG__/.test(ui) && !/^\s*window\.__METABOLISM_DEBUG__/m.test(ui) && /if \(DEBUG\) \{ \$\('dbg-line'\)/.test(ui), '開発者向けの窓口（state の公開）と計算の健全性の表示は ?debug のときだけ');
   const all = ['index.html', 'css/style.css', 'js/data.js', 'js/glossary.js', 'js/sim.js', 'js/aggregate.js', 'js/ui.js'].map(f => fs.readFileSync(path.join(pub, f), 'utf8')).join('\n');
-  ok(!/https?:\/\/(?!www\.w3\.org\/2000\/svg)/.test(all) && !/fetch\(|XMLHttpRequest|WebSocket|sendBeacon|EventSource|import\(|document\.cookie/.test(all), '外部への通信・外部の URL・Cookie を使わない（SVG の名前空間 URI のみ）');
+  const allNoCredits = all.replace(/<dl class="credits"[\s\S]*?<\/dl>/, '').replace(/\/\*[\s\S]*?\*\//g, '');
+  ok(!/https?:\/\/(?!www\.w3\.org\/2000\/svg)/.test(allNoCredits) && !/fetch\(|XMLHttpRequest|WebSocket|sendBeacon|EventSource|import\(|document\.cookie/.test(all), '外部への通信・外部の URL・Cookie を使わない（SVG の名前空間 URI と、作者・ライセンス欄のリンク・コメントを除く）');
+  const links = [...html.matchAll(/<a [^>]*href="([^"]+)"[^>]*>/g)];
+  ok(links.length === 3 && links.every(m => /target="_blank"/.test(m[0]) && /rel="noopener/.test(m[0])) && links.map(m => m[1]).join() === 'https://note.com/irribow1993,LICENSE.txt,https://creativecommons.org/licenses/by-nc-sa/4.0/deed.ja',
+    'リンクは作者・ライセンス欄の3つだけ（note・LICENSE.txt・CC BY-NC-SA 4.0）。新しいタブで開き、noopener 付き。クリックするまで読み込まれない');
+  ok(/GNU General Public License v3\.0/.test(html) && /CC BY-NC-SA 4\.0/.test(html) && /こんにゃくお爺さん/.test(html) && fs.existsSync(path.join(pub, 'LICENSE.txt')) && /GNU GENERAL PUBLIC LICENSE/.test(fs.readFileSync(path.join(pub, 'LICENSE.txt'), 'utf8')), 'サイト上に作者・ライセンス（GPL-3.0 の全文 LICENSE.txt、解説文は CC BY-NC-SA 4.0）を表示');
+  ok(/CC BY-NC-SA 4\.0/.test(fs.readFileSync(path.join(pub, 'js/glossary.js'), 'utf8').slice(0, 800)), 'glossary.js の先頭に、解説文のライセンス（CC BY-NC-SA 4.0）の表示');
   ok(!/\beval\(|new Function\(/.test(all) && !/<script>(?!\s*<\/script>)/.test(html) && !/ on[a-z]+="/.test(html), 'eval・インラインのスクリプト・インラインのイベント属性がない（CSP の script-src \'self\' で動く）');
   const hdr = fs.readFileSync(path.join(pub, '_headers'), 'utf8');
   ok(/Content-Security-Policy: default-src 'none'; script-src 'self'/.test(hdr) && /connect-src 'none'/.test(hdr) && /frame-ancestors 'none'/.test(hdr), 'Cloudflare Pages の _headers に CSP（自サイトのみ・通信なし・埋め込み禁止）');

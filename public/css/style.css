@@ -369,3 +369,8 @@ h3.sec { font-family: var(--mono); font-size: 11px; letter-spacing: .2em; color:
 @media (max-width: 380px) { .rp-pill .rp-long { display: none; } .rp-pill .rp-short { display: inline; } .brand { letter-spacing: .22em; } }
 /* 横向きのスマートフォンなど、高さが低い画面：ヘッダを固定せず、内容の表示領域を広くとる */
 @media (max-height: 500px) { header.top { position: static; } .goal-hint { display: none; } }
+
+.credits { margin: 4px 0 14px; font-size: 12.5px; }
+.credits dt { color: var(--dim); font-size: 11px; margin-top: 6px; }
+.credits dd { margin: 1px 0 0; }
+.credits a { color: var(--lit); }

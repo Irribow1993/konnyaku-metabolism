@@ -53,7 +53,11 @@ async def main():
             await pg.tap(f'.about-actions [data-term={t}]'); await pg.wait_for_timeout(150)
             ok(await pg.is_visible('#sheet'), f'詳細タブ「このゲームについて」から {t} が開く')
             await pg.tap('#sheet-close'); await pg.wait_for_timeout(100)
-        await pg.tap('#about-ver'); 
+        cr = await pg.text_content('#credits')
+        ok('こんにゃくお爺さん' in cr and 'GNU General Public License v3.0' in cr and 'CC BY-NC-SA 4.0' in cr and 'Claude' in cr, '詳細タブに作者・制作・ライセンス（GPL-3.0／CC BY-NC-SA 4.0）')
+        r = await pg.request.get(BASE + 'LICENSE.txt')
+        ok(r.status == 200 and 'GNU GENERAL PUBLIC LICENSE' in await r.text(), 'LICENSE.txt（GPL-3.0 の全文）が配信される')
+
         await shot(pg, 'R1_detail_about')
         await pg.tap('nav.tabs button[data-tab=cell]'); await pg.wait_for_timeout(150)
         await pg.tap('#btn-help'); await pg.wait_for_timeout(150)
