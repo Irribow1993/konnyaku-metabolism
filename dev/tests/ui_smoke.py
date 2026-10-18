@@ -12,7 +12,23 @@ from playwright.async_api import async_playwright
 ROOT = Path(__file__).resolve().parent.parent
 # 画面テストは ?debug=1 で開く（state を読むための窓口は、debug のときだけ有効。v0.1.0）
 ARG = sys.argv[1] if len(sys.argv) > 1 else str(ROOT.parent / 'public' / 'index.html')
-URL = (ARG if ARG.startswith('http') else Path(ARG).resolve().as_uri()) + '?debug=1'
+def serve(index):
+    """file:// で開くと、Chromium が再読み込みのときにまれに localStorage・sessionStorage を失う（負荷をかけると数回に1回。v0.2.0 公開前確認で調査）。
+    ゲームの不具合ではないので、ファイルを渡されたときもその場で http で配信して開く（dev/tools/serve.py と同じく _headers を付ける）。"""
+    import http.server, socketserver, threading, functools
+    pub = Path(index).resolve().parent
+    headers = [tuple(x.strip() for x in l.strip().split(':', 1)) for l in (pub / '_headers').read_text(encoding='utf-8').splitlines() if l.startswith('  ') and ':' in l] if (pub / '_headers').exists() else []
+    class H(http.server.SimpleHTTPRequestHandler):
+        def end_headers(self):
+            for k, v in headers: self.send_header(k, v)
+            super().end_headers()
+        def log_message(self, *a): pass
+    H.extensions_map.update({'.js': 'text/javascript', '.svg': 'image/svg+xml'})
+    srv = socketserver.ThreadingTCPServer(('127.0.0.1', 0), functools.partial(H, directory=str(pub)))
+    srv.daemon_threads = True
+    threading.Thread(target=srv.serve_forever, daemon=True).start()
+    return f'http://127.0.0.1:{srv.server_address[1]}/' + Path(index).name
+URL = (ARG if ARG.startswith('http') else serve(ARG)) + '?debug=1'
 SHOT = sys.argv[2] if len(sys.argv) > 2 else None
 FIX = json.loads((ROOT / 'tests/fixtures/v1_saves.json').read_text(encoding='utf-8'))
 
@@ -45,7 +61,7 @@ async def main():
             pg.on('console', lambda m: errors.append('console: ' + m.text) if m.type == 'error' else None)   # CSP 違反などもエラーとして数える
             await pg.route('**/fonts.googleapis.com/**', lambda r: r.abort())
             if save_json:
-                await pg.add_init_script("if (!sessionStorage.getItem('seeded')) { localStorage.setItem('metabolism.save.v1', %s); sessionStorage.setItem('seeded', '1'); }" % json.dumps(save_json))
+                await pg.add_init_script("if (!window.name.includes('seeded')) { localStorage.setItem('metabolism.save.v1', %s); window.name = 'seeded'; }" % json.dumps(save_json))
             await pg.goto(URL)
             await pg.wait_for_timeout(600)
             return pg
@@ -78,7 +94,7 @@ async def main():
         v1 = FIX['nadStall']
         pg = await open_page(fresh_v1('nadStall'))
         sv = await st(pg, '({ v: s.saveVersion, tp: ("tp" in s.amounts), C: MB.Sim.carbon(s), tri: s.amounts.gap + s.amounts.dhap, fbp: s.amounts.f16bp, g: s.totals.glcSupplied })')
-        ok(sv['v'] == 6 and not sv['tp'], '読み込み時に最新版（v6）へ移行（tp 項目なし）')
+        ok(sv['v'] == 7 and not sv['tp'], '読み込み時に最新版（v7）へ移行（tp 項目なし）')
         C1 = 6 * v1['amounts']['glc'] + 3 * v1['amounts']['tp'] + 3 * v1['amounts']['pyr'] + 6 * (sv['g'] - v1['totals']['glcSupplied'])
         ok(abs(sv['C'] - C1) < 1e-6, f"移行後も炭素が保存される（{sv['C']:.3f} = {C1:.3f}）")
         ok(abs(sv['tri'] + 2 * sv['fbp'] - v1['amounts']['tp']) < 1.0,
@@ -141,11 +157,13 @@ async def main():
         ok(sum(r.strip().startswith(str(i + 1)) and '？？？' in r and '解析中' not in r for i, r in enumerate(rows)) == 3, '解析待ちの3つは「？？？」のみ')
         ok('ホスホフルクトキナーゼ' in rows[2] and '不可逆' in rows[2] and 'u/秒' in rows[2], 'PFK-1 の行：名前・「不可逆」・速度')
         ok('調節' in rows[0], 'HK の行に「調節」の印（実在の調節）')
+        ok('調節' in rows[2] and '調節' in rows[9], 'v0.2.0：PFK-1・PK の行にも「調節」の印')
         ok('Q/K' in rows[1], 'PGI の行に平衡からの距離（Q/K）')
         await shot(pg, 'D_micro')
         await pg.tap('#chain .enz >> nth=2'); await pg.wait_for_timeout(200)
         card = await pg.text_content('#sheet-body')
         ok('ΔG°′' in card and 'この版では省略' in card, 'PFK-1 のカード：ΔG°′ と、省略している調節')
+        ok('ATP による阻害' in card and 'いまの ATP による抑制：×' in card, 'v0.2.0：PFK-1 のカードに、実装した調節（ATP による阻害）と、いまの係数')
         await pg.tap('#sheet-close'); await pg.wait_for_timeout(100)
         await pg.tap('#chain .enz >> nth=8'); await pg.wait_for_timeout(200)
         card = await pg.text_content('#sheet-body')
@@ -164,7 +182,7 @@ async def main():
         fx3['lastSaved'] = int(time.time() * 1000)
         pg = await open_page(json.dumps(fx3))
         k = await st(pg, '({ v: s.saveVersion, id: Object.keys(s.knowledge.identified).sort(), an: MB.Sim.analyzing(s) })')
-        ok(k['v'] == 6 and k['id'] == ['hk', 'pfk', 'pk'] and k['an'] == ['pgi', 'eno'], f"v3 で解放済みの HK・PFK-1・PK は同定済みとして引き継がれる（解析中 {k['an']}）")
+        ok(k['v'] == 7 and k['id'] == ['hk', 'pfk', 'pk'] and k['an'] == ['pgi', 'eno'], f"v3 で解放済みの HK・PFK-1・PK は同定済みとして引き継がれる（解析中 {k['an']}）")
         await pg.close()
 
         print('[E] 停止：ATP 枯渇・回収期に回せる物質なし')
@@ -224,7 +242,7 @@ async def main():
         await pg.tap('nav.tabs button[data-tab=research]'); await pg.wait_for_timeout(200)
         cards = await pg.text_content('#upgrades')
         ok('準備期の5つの酵素の速さ ×1.0→×1.5' in cards.replace(' ', '') or '準備期の5つの酵素の速さ×1.0→×1.5' in cards.replace(' ', ''), '研究カードは倍率で表示（準備期の5つの酵素の速さ ×1.0 → ×1.5）')
-        ok('グルコースの自動取り込み' in cards and '個/秒' in cards, '輸送体は「グルコースの自動取り込み ○ → ○ 個/秒」')
+        ok('最大輸送能力' in cards and '個/秒' in cards and 'いま入っている速さ' in cards, 'v0.2.0：輸送体は「最大輸送能力 ○ → ○ 個/秒」と「いま入っている速さ」を分けて表示')
         now = await pg.text_content('.nowcell')
         ok('グルコース' in now and 'ピルビン酸' in now and '研究ポイント' in now, f'研究タブの上に「いまの細胞」（{now.strip()}）')
         await pg.tap('#upgrades .upg >> nth=2 >> button'); await pg.wait_for_timeout(400)   # 回収期の酵素
@@ -252,8 +270,8 @@ async def main():
         pg = await open_page(v4('allIdentified45min'))
         k = await st(pg, '({ v: s.saveVersion, rp: s.rp, n: s.levels.nadsalv, c: s.totals.cultures, id: Object.keys(s.knowledge.identified).length, lac: s.amounts.lac, ldh: s.levels.enz_ldh })')
         src = fx4['allIdentified45min']
-        ok(k['v'] == 6 and k['n'] == src['levels']['nadsalv'] and k['c'] == src['totals']['cultures'] and k['id'] == 10 and k['lac'] == 0 and k['ldh'] == 0,
-           f"v4 → v6：補充の累計 {k['n']} 回・細胞 {k['c']} 回・同定 {k['id']} 件を保持、乳酸 0・LDH 未同定")
+        ok(k['v'] == 7 and k['n'] == src['levels']['nadsalv'] and k['c'] == src['totals']['cultures'] and k['id'] == 10 and k['lac'] == 0 and k['ldh'] == 0,
+           f"v4 → v7：補充の累計 {k['n']} 回・細胞 {k['c']} 回・同定 {k['id']} 件を保持、乳酸 0・LDH 未同定")
         ok('ANAEROBIC' in await pg.text_content('#env'), 'ヘッダに ENV ANAEROBIC')
         await pg.tap('#env'); await pg.wait_for_timeout(200)
         body = await pg.text_content('#sheet-body')
@@ -366,8 +384,8 @@ async def main():
         src5 = fx5['lactate75min']
         pg = await open_page(v5('lactate75min', rp=5000))
         k = await st(pg, '({ v: s.saveVersion, lac: s.amounts.lac, out: s.amounts.lacOut, ldh: s.levels.enz_ldh, mct: s.levels.tr_mct, acc: s.milestones.lac_accum != null })')
-        ok(k['v'] == 6 and k['ldh'] == src5['levels']['enz_ldh'] and k['mct'] == 0 and k['out'] == 0 and k['lac'] > 10000,
-           f"v5 → v6：LDH Lv{k['ldh']} を保持、0.3 で溜まった乳酸 {k['lac']:.0f} もそのまま、細胞外 0・MCT 未同定")
+        ok(k['v'] == 7 and k['ldh'] == src5['levels']['enz_ldh'] and k['mct'] == 0 and k['out'] == 0 and k['lac'] > 10000,
+           f"v5 → v7：LDH Lv{k['ldh']} を保持、0.3 で溜まった乳酸 {k['lac']:.0f} もそのまま、細胞外 0・MCT 未同定")
         ok(k['acc'], '読み込んだ直後に「乳酸が細胞の中にたまり続けている」が記録される（LDH が働いていて乳酸が多いため）')
         stt = await pg.text_content('#status-text')
         ok(not await pg.is_visible('#stall') and 'たまり続けている' in await pg.text_content('#lp-hint'), f'乳酸がたまっても停止や罰則はない（状態表示「{stt.strip()}」）。「乳酸の出入り」欄に「たまり続けている」')
@@ -464,6 +482,225 @@ async def main():
         ok('運び去られた乳酸の炭素' in chk and '✗' not in chk, '詳細タブ：系の外へ運び去られた乳酸の炭素を表示、保存量の検算 ✓')
         defs = await pg.text_content('#defs')
         ok('輸送の平衡 K' in defs and '1.58' in defs, '詳細タブ：MCT の輸送の平衡')
+        await pg.close()
+
+        # ================= v0.1.2 =================
+        fx6 = json.loads((ROOT / 'tests/fixtures/v6_saves.json').read_text(encoding='utf-8'))
+        def v6(name):
+            d = json.loads(json.dumps(fx6[name])); d['lastSaved'] = int(time.time() * 1000)
+            return json.dumps(d)
+        code_of = lambda pg, j: pg.evaluate('j => MB.SaveCode.encode(MB.Sim.deserialize(j))', j)
+        async def accept_next(pg):
+            pg.once('dialog', lambda d: asyncio.ensure_future(d.accept()))
+
+        print('[Q] v0.1.2：セーブの書き出し')
+        pg = await open_page(v6('mctAnalyzing50min'))
+        await pg.tap('nav.tabs button[data-tab=detail]'); await pg.wait_for_timeout(200)
+        ok(not await pg.is_visible('#btn-restore'), '読み込む前は「読み込む前に戻す」が出ない')
+        await pg.tap('#btn-export'); await pg.wait_for_timeout(200)
+        code = await pg.input_value('#io-export-text')
+        ok(code.startswith('METABOLISM1:') and await pg.is_visible('#io-export'), f'「書き出す」で文字列が出る（{len(code):,} 文字）')
+        dec = await pg.evaluate('c => { const r = MB.SaveCode.decode(c); return r.ok && r.state.t; }', code)
+        ok(dec is not None and 3000 <= dec < 3010, f'書き出した文字列は、そのまま読める（ゲーム内時間 {dec} 秒）')
+        await pg.tap('#btn-copy'); await pg.wait_for_timeout(300)
+        msg = await pg.text_content('#io-msg')
+        ok(await pg.is_visible('#io-msg') and ('コピーしました' in msg or 'コピーしてください' in msg), f'「コピーする」：結果を知らせる（{msg[:24]}…）')
+        await shot(pg, 'Q1_export')
+        await pg.close()
+
+        print('[R] v0.1.2：読み込み・断る・読み込む前に戻す')
+        pg = await open_page()
+        await pg.evaluate("() => document.querySelectorAll('#sheet-close').forEach(b => b.click())")
+        for _ in range(2):
+            await pg.tap('#btn-glc'); await pg.wait_for_timeout(100)
+        t_before = await st(pg, 's.t')
+        await pg.tap('nav.tabs button[data-tab=detail]'); await pg.wait_for_timeout(200)
+        await pg.tap('#btn-import'); await pg.wait_for_timeout(150)
+        await pg.fill('#io-import-text', 'METABOLISM1:abc:00000000')
+        await pg.tap('#btn-import-go'); await pg.wait_for_timeout(200)
+        msg = await pg.text_content('#io-msg')
+        ok('読み込めませんでした' in msg and await pg.evaluate("() => document.getElementById('io-msg').classList.contains('err')"), f'壊れた文字列は断り、理由を出す（{msg[:40]}…）')
+        ok(await st(pg, 's.t') >= t_before and await st(pg, 's.totals.glcSupplied') == 20, '断ったときは、いまの進み具合のまま')
+        code = await code_of(pg, v6('mctAnalyzing50min'))
+        await pg.fill('#io-import-text', code)
+        dialogs = []
+        pg.once('dialog', lambda d: (dialogs.append(d.message), asyncio.ensure_future(d.accept())))
+        async with pg.expect_navigation():
+            await pg.tap('#btn-import-go')
+        await pg.wait_for_timeout(800)
+        ok(dialogs and 'いま：' in dialogs[0] and '読み込む内容：' in dialogs[0] and '10/12' not in dialogs[0].split('読み込む内容：')[0], '上書きの前に、いまと読み込む内容の要約を並べて確かめる')
+        k = await st(pg, '({ t: s.t, enz: MB.MICRO_IDS.filter(i => MB.Sim.isIdentified(s, i)).length, rp: s.rp })')
+        ok(3000 <= k['t'] < 3010 and k['enz'] == 10, f"読み込んだ内容で再開（ゲーム内時間 {k['t']:.0f} 秒・酵素 {k['enz']}/10）。留守中の進行は起きない")
+        bk = await pg.evaluate("() => { const b = MB.Sim.deserialize(localStorage.getItem('metabolism.save.backup')); return b && b.totals.glcSupplied; }")
+        ok(bk == 20, '読み込む前の進み具合が、バックアップとして1件残る')
+        await pg.tap('nav.tabs button[data-tab=detail]'); await pg.wait_for_timeout(250)
+        ok(await pg.is_visible('#btn-restore'), '「読み込む前に戻す」が出る')
+        await accept_next(pg)
+        async with pg.expect_navigation():
+            await pg.tap('#btn-restore')
+        await pg.wait_for_timeout(800)
+        k2 = await st(pg, '({ t: s.t, g: s.totals.glcSupplied })')
+        bk2 = await pg.evaluate("() => { const b = MB.Sim.deserialize(localStorage.getItem('metabolism.save.backup')); return b && b.t; }")
+        ok(k2['g'] == 20 and k2['t'] < 100 and bk2 is not None and bk2 >= 3000, f"「読み込む前に戻す」で元の進み具合に戻り（グルコース {k2['g']}）、読み込んだ内容はバックアップへ")
+        await pg.tap('nav.tabs button[data-tab=detail]'); await pg.wait_for_timeout(250)
+        wipe_msg = []
+        pg.once('dialog', lambda d: (wipe_msg.append(d.message), asyncio.ensure_future(d.accept())))
+        await pg.tap('#btn-wipe'); await pg.wait_for_timeout(400)
+        ok(wipe_msg and '控えも消えます' in wipe_msg[0] and '元に戻せません' in wipe_msg[0], '「すべて最初から」の確認に「読み込む前に戻す」の控えも消えることを書く')
+        ok(await pg.evaluate("() => localStorage.getItem('metabolism.save.backup')") is None and not await pg.is_visible('#btn-restore'),
+           '「すべて最初から」では、読み込む前のセーブも消える（「読み込む前に戻す」も消える）')
+        await pg.close()
+
+        print('[V] v0.1.2：保存領域がいっぱいのとき（読み込み・戻す・自動保存）')
+        FULL = """k => { const orig = Storage.prototype.setItem; window.__full = k;
+            Storage.prototype.setItem = function (key, val) { if (window.__full && (window.__full === '*' || key === window.__full)) throw new DOMException('full', 'QuotaExceededError'); return orig.call(this, key, val); }; }"""
+        for target, label in [('metabolism.save.backup', '控えが書けない'), ('metabolism.save.v1', 'セーブが書けない')]:
+            pg = await open_page()
+            await pg.evaluate("() => document.querySelectorAll('#sheet-close').forEach(b => b.click())")
+            await pg.tap('#btn-glc'); await pg.wait_for_timeout(300)
+            await pg.tap('nav.tabs button[data-tab=detail]'); await pg.wait_for_timeout(150)
+            await pg.tap('#btn-save'); await pg.wait_for_timeout(150)
+            before = await pg.evaluate("() => localStorage.getItem('metabolism.save.v1')")
+            code = await code_of(pg, v6('mctAnalyzing50min'))
+            await pg.evaluate(FULL, target)
+            await pg.tap('#btn-import'); await pg.fill('#io-import-text', code)
+            await accept_next(pg)
+            await pg.tap('#btn-import-go'); await pg.wait_for_timeout(700)
+            msg = await pg.text_content('#io-msg')
+            k = await pg.evaluate("() => ({ save: localStorage.getItem('metabolism.save.v1'), bk: localStorage.getItem('metabolism.save.backup'), g: window.__METABOLISM_DEBUG__.state.totals.glcSupplied })")
+            ok('保存領域がいっぱい' in msg and 'そのまま' in msg and k['save'] == before and k['bk'] is None and k['g'] == 10,
+               f'{label}：読み込みを中止し、セーブ・控え・いまの進み具合はそのまま（{msg[:30]}…）')
+            await pg.close()
+        # v0.2.0 公開前確認1：すでに控えがあるときも、控えとセーブの両方を失わない（書けない・書いたが読み直すと違う・元に戻すのにも失敗）
+        FAULT = """([k, kind]) => { const set = Storage.prototype.setItem; let hit = false;
+            Storage.prototype.setItem = function (key, val) {
+              if (kind === 'stuck' && hit) throw new DOMException('full', 'QuotaExceededError');
+              if (key !== k || (kind === 'corrupt' && hit)) return set.call(this, key, val);   // corrupt は最初の1回だけ壊す（元に戻す書き込みは通る）
+              hit = true;
+              if (kind === 'throw') throw new DOMException('full', 'QuotaExceededError');
+              return set.call(this, key, val.slice(0, Math.floor(val.length / 2)));   // corrupt・stuck：途中までしか書けない
+            }; }"""
+        for target, kind, label in [('metabolism.save.backup', 'throw', '控えが書けない'), ('metabolism.save.backup', 'corrupt', '控えを書いたが読み直すと違う'),
+                                    ('metabolism.save.v1', 'throw', 'セーブが書けない'), ('metabolism.save.v1', 'corrupt', 'セーブを書いたが読み直すと違う')]:
+            pg = await open_page()
+            await pg.evaluate("() => document.querySelectorAll('#sheet-close').forEach(b => b.click())")
+            await pg.tap('#btn-glc'); await pg.wait_for_timeout(300)
+            await pg.tap('nav.tabs button[data-tab=detail]'); await pg.wait_for_timeout(150)
+            await pg.tap('#btn-save'); await pg.wait_for_timeout(150)
+            old_bk = await pg.evaluate("() => { const s = MB.Sim.createState(); MB.Sim.addGlucose(s, 77); const j = MB.Sim.serialize(s); localStorage.setItem('metabolism.save.backup', j); return j; }")
+            before = await pg.evaluate("() => localStorage.getItem('metabolism.save.v1')")
+            code = await code_of(pg, v6('mctAnalyzing50min'))
+            await pg.evaluate(FAULT, [target, kind])
+            await pg.tap('#btn-import'); await pg.fill('#io-import-text', code)
+            await accept_next(pg)
+            await pg.tap('#btn-import-go'); await pg.wait_for_timeout(700)
+            msg = await pg.text_content('#io-msg')
+            k = await pg.evaluate("() => ({ save: localStorage.getItem('metabolism.save.v1'), bk: localStorage.getItem('metabolism.save.backup'), g: window.__METABOLISM_DEBUG__.state.totals.glcSupplied })")
+            ok('控えは、そのまま' in msg and k['save'] == before and k['bk'] == old_bk and k['g'] == 10,
+               f'既存の控えあり・{label}：読み込みを中止し、セーブ・既存の控え・いまの進み具合はすべて元のまま')
+            await pg.close()
+        pg = await open_page()
+        await pg.evaluate("() => document.querySelectorAll('#sheet-close').forEach(b => b.click())")
+        await pg.tap('nav.tabs button[data-tab=detail]'); await pg.wait_for_timeout(150)
+        await pg.evaluate("() => localStorage.setItem('metabolism.save.backup', MB.Sim.serialize(MB.Sim.createState()))")
+        code = await code_of(pg, v6('mctAnalyzing50min'))
+        await pg.evaluate(FAULT, ['metabolism.save.backup', 'stuck'])
+        await pg.tap('#btn-import'); await pg.fill('#io-import-text', code)
+        await accept_next(pg)
+        await pg.tap('#btn-import-go'); await pg.wait_for_timeout(700)
+        msg = await pg.text_content('#io-msg')
+        ok('元に戻すこともできませんでした' in msg and '書き出す' in msg and await pg.evaluate("() => !!window.__METABOLISM_DEBUG__.state"),
+           '控えが壊れ、元に戻すのにも失敗したときは、そう伝えて「書き出す」で控えを取るよう案内する（画面の進み具合は残る）')
+        await pg.close()
+        pg = await open_page()
+        await pg.evaluate("() => document.querySelectorAll('#sheet-close').forEach(b => b.click())")
+        await pg.evaluate(FULL, 'metabolism.save.v1')
+        await pg.wait_for_timeout(11000)
+        ok('自動保存できませんでした' in await pg.text_content('#toast'), '自動保存が失敗したら、1回だけ知らせる（「書き出す」で控えを取れる）')
+        await pg.close()
+
+        print('[S] v0.1.2：中身を信用しない（HTML を含む記録）')
+        pg = await open_page()
+        evil = await pg.evaluate("""() => { const s = MB.Sim.createState();
+            s.t = 10; s.log = [{ t: 1, text: '<img src=x onerror="window.__pwned=1">記録' }]; s.milestones = { first_pyr: 1 };
+            return MB.SaveCode.encode(s); }""")
+        await pg.tap('nav.tabs button[data-tab=detail]'); await pg.wait_for_timeout(200)
+        await pg.tap('#btn-import'); await pg.fill('#io-import-text', evil)
+        await accept_next(pg)
+        async with pg.expect_navigation():
+            await pg.tap('#btn-import-go')
+        await pg.wait_for_timeout(800)
+        await pg.evaluate("() => document.querySelectorAll('#sheet-close').forEach(b => b.click())")
+        await pg.tap('nav.tabs button[data-tab=log]'); await pg.wait_for_timeout(300)
+        logtxt = await pg.text_content('#log')
+        ok('<img' in logtxt and await pg.evaluate('() => window.__pwned') is None and await pg.locator('#log img').count() == 0,
+           '記録の文に入った HTML は文字として表示され、実行されない')
+        await pg.close()
+
+        print('[T] v0.1.2：第1章 完（LACTATE BALANCE 達成済みのセーブ）')
+        pg = await open_page(v6('afterMct65min'))
+        await pg.wait_for_timeout(400)
+        ok(await pg.is_visible('#event-ch1'), '達成済みのセーブでは、読み込んだあとに「第1章 完」が出る')
+        stats = await pg.text_content('#ch1-stats')
+        ok('ゲーム内の経過時間' in stats and '留守のあいだ' in stats and 'つくったピルビン酸' in stats and '使った細胞' in stats and 'NAD⁺ の補充' in stats, '振り返りの数値（時間・ピルビン酸・細胞・補充）')
+        card = await pg.text_content('#event-ch1')
+        ok('酸素があっても、乳酸はつくられ得る' in card and '今後のアップデート' in card, '次の章の予告：酸素があっても乳酸はつくられ得る、と書く')
+        await shot(pg, 'T1_chapter1')
+        await pg.tap('#ch1-go'); await pg.wait_for_timeout(200)
+        ok(not await pg.is_visible('#event-ch1') and await st(pg, 's.milestones.chapter1_clear') is not None, '「このまま続ける」で閉じ、記録 chapter1_clear が残る')
+        gt = await pg.text_content('#goal-text')
+        ok(gt.startswith('第1章 完') and not await pg.is_visible('#goal-bar'), f'次の目標は「第1章 完」の予告になり、進み具合のバーは出ない（{gt[:12]}…）')
+        await pg.tap('nav.tabs button[data-tab=log]'); await pg.wait_for_timeout(200)
+        ok('第1章 解糖系と発酵 完' in await pg.text_content('#log'), '記録タブにも残る')
+        saved = await pg.evaluate("() => { window.name = 'seeded'; window.__pre = localStorage.getItem('metabolism.save.v1'); return JSON.parse(window.__pre).milestones.chapter1_clear; }")
+        pre = await pg.evaluate("() => window.__pre")
+        await pg.reload(); await pg.wait_for_function('() => window.__METABOLISM_DEBUG__'); await pg.wait_for_timeout(900)
+        diag = await pg.evaluate("p => { const j = localStorage.getItem('metabolism.save.v1'); const st = MB.Sim.deserialize(p); return [window.name, window.__METABOLISM_DEBUG__.state.milestones.chapter1_clear, window.__METABOLISM_DEBUG__.state.t, JSON.parse(p).t, st ? MB.Sim.checkIntegrity(st) : 'deser-null', j === p, j && JSON.parse(j).milestones.chapter1_clear, j && JSON.parse(j).t]; }", pre)
+        ok(saved is not None and diag[1] is not None and not await pg.is_visible('#event-ch1'), f'開き直しても、もう一度は出ない（保存されたセーブに chapter1_clear がある）{diag}')
+        await pg.tap('nav.tabs button[data-tab=detail]')
+        try: await pg.wait_for_selector('#btn-ch1-again', state='visible', timeout=5000)
+        except Exception: ok(False, f'詳細タブに「もう一度見る」が出ない {await pg.evaluate("() => [document.querySelector(`nav.tabs .on`)?.dataset.tab, window.__METABOLISM_DEBUG__.state.milestones.chapter1_clear]")}')
+        await pg.tap('#btn-ch1-again'); await pg.wait_for_timeout(200)
+        ok(await pg.is_visible('#event-ch1'), '詳細タブの「第1章のまとめをもう一度見る」で開ける')
+        await pg.tap('#ch1-export'); await pg.wait_for_timeout(300)
+        ok(not await pg.is_visible('#event-ch1') and await pg.is_visible('#io-export') and (await pg.input_value('#io-export-text')).startswith('METABOLISM1:'),
+           '「セーブを書き出す」で詳細タブの書き出しへ')
+        await pg.close()
+
+        print('[W] v0.2.0：PFK-1 の調節と GLUT の表示')
+        pg = await open_page(v6('afterMct65min'))
+        await pg.evaluate("() => document.querySelectorAll('#sheet-close').forEach(b => b.click())")
+        if await pg.is_visible('#event-ch1'): await pg.tap('#ch1-go')      # 達成済みのセーブなので「第1章 完」が先に出る
+        await pg.wait_for_timeout(2500)
+        await pg.tap('nav.tabs button[data-tab=detail]'); await pg.wait_for_timeout(300)
+        chk = await pg.text_content('#check')
+        ok('GLUT：最大輸送能力 4' in chk and 'いま入っている速さ' in chk and '外 50 で一定' in chk, 'v0.2.0：詳細タブに GLUT の最大輸送能力と、いま入っている速さ')
+        ok(chk.count('✓') == 2 and '✗' not in chk, 'v0.1.2 で F1,6BP が溜まったセーブを読んでも、保存量の検算は ✓')
+        defs = await pg.text_content('#defs')
+        ok('ATP による阻害・ADP による解除' in defs and '対称な輸送体' in defs and '活性化' in defs, 'v0.2.0：反応の定義に PFK-1・PK の調節の式と GLUT の式')
+        await pg.evaluate("() => { const s = window.__METABOLISM_DEBUG__.state; MB.Sim.addGlucose(s, 300); }")
+        await pg.wait_for_timeout(2500)
+        chk = await pg.text_content('#check')
+        ok('GLUT で細胞の外へ戻ったグルコースの炭素' in chk and 'いま入っている速さ -' in chk, f'v0.2.0：細胞の中にグルコースが外より多いと外へ戻り、その炭素も示す（{chk[chk.find("GLUT："):][:60]}…）')
+        await pg.tap('nav.tabs button[data-tab=research]'); await pg.wait_for_timeout(300)
+        ok('最大輸送能力' in await pg.text_content('#upgrades'), '研究タブ：GLUT の研究に「最大輸送能力」')
+        await pg.close()
+        # LDH の前・ATP が足りているとき：状態のひとことで PFK-1 の調節を説明する
+        pg = await open_page(save_v2({"glc": 30, "atp": 97, "adp": 3}, rp=0, levels={"glut": 3, "prep": 4, "pay": 4}, totals={"pyrProduced": 100, "glcSupplied": 300}))
+        await pg.evaluate("() => document.querySelectorAll('#sheet-close').forEach(b => b.click())")
+        seen = ''
+        for _ in range(20):
+            await pg.wait_for_timeout(300)
+            seen = await pg.text_content('#status') if await pg.query_selector('#status') else ''
+            if 'PFK-1' in seen: break
+        ok('PFK-1 が解糖系の流れを絞っています' in seen, f'v0.2.0：ATP が足りているときの状態のひとこと（{seen.strip()[:50]}）')
+        await pg.close()
+
+        print('[U] v0.1.2：その場で LACTATE BALANCE を達成したとき')
+        pg = await open_page(v6('mctAnalyzing50min'))
+        await pg.evaluate("() => { window.__METABOLISM_DEBUG__.state.milestones.lac_balance = window.__METABOLISM_DEBUG__.state.t; }")
+        await pg.wait_for_timeout(400)
+        ok(await pg.is_visible('#event-ch1'), '遊んでいる途中で達成すると、その場で「第1章 完」が出る')
         await pg.close()
 
         ok(not errors, 'JavaScript エラーなし' + (f'：{errors}' if errors else ''))

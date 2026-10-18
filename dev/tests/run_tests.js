@@ -1,4 +1,13 @@
-/* METABOLISM Prototype 0.4.1 検証： node tests/run_tests.js
+/* METABOLISM 検証： node dev/tests/run_tests.js
+ * v0.2.0（PFK-1・PK の調節、GLUT の可逆輸送、細胞の仕事の研究 +80%/Lv）で変えたのは次の箇所（判定の基準は変えていない）：
+ *   炭素の収支  GLUT で細胞の外へ戻ったグルコースを「系の外へ出た分」（S.carbonOut）に含めて比べる（T2・T9・T16・S3）
+ *   T4         定常状態の確かめを「GLUT の実際の流束 ＝ 入口 ＝ 出口」に（GLUT は定速ではなくなった）
+ *   S5・M5・M15 以前の版とのビット単位の比較は、v0.2.0 のコードに v0.1.2 のパラメータ（調節なし・GLUT 定速・+40%/Lv）を
+ *              与えたもの（legacySim）で行う。v0.2.0 で変えたのが3つのモデルの変更だけで、解法などは変わっていないことの確認
+ *   S8・M10    累積記録の比較で、v0.2.0 で増えた glcReturned（0）を除いて比べる
+ *   S11        準備期 Lv1 で試す（GLUT が細胞の中のグルコースで遅くなり、準備期 Lv0 では 300 秒のピルビン酸が 188 と基準の 200 に届かないため）
+ *   M15        v6 のセーブは v7 に移行する（保存すると版の番号と glcReturned だけが変わる）
+ * v0.2.0 の4条件（長時間の安定性・ATP 需要への応答・保存則・ゲーム経済）は dev/tests/v020_tests.js。
  * 0.4.1 は説明文の修正のみ。M15 で 0.4 と計算が同じであることと、0.4 のセーブとの互換を確認する。
  * 0.4 で既存テストを変えたのは次の3か所だけ（反応・版が増えたことへの追従。判定の基準は変えていない）：
  *   T3  計算対象が15反応（MCT と、細胞の周りからの乳酸の流出を追加）
@@ -28,6 +37,9 @@ const withParams = (mod, fn) => {                        // 一時的にデー�
   try { mod(); return fn(); } finally { JSON.parse(keep).forEach(([v, k], i) => { MB.REACTIONS[i].vmaxBase = v; MB.REACTIONS[i].kinetics = k; }); }
 };
 const PREP = ['hk', 'pgi', 'pfk', 'aldo', 'tpi'], PAY = ['gapdh', 'pgk', 'pgam', 'eno', 'pk'];
+const legacySim = require('./legacy_sim.js');   // v0.2.0 のコード＋v0.1.2 のパラメータ（以前の版との比較用）
+const LM = legacySim(), L = LM.Sim;
+const noRet = t => { const o = Object.assign({}, t); delete o.glcReturned; return o; };   // v0.2.0 で増えた累計を除く
 
 /* ---------- T1 化学量論 ---------- */
 console.log('[T1] ミクロ10反応の化学量論');
@@ -54,7 +66,7 @@ console.log('[T2] 長時間計算での保存則と非負性');
   const c = S.conservation(s);
   ok(near(c.adenylate, 100, 1e-9), `ATP+ADP = ${c.adenylate}`);
   ok(near(c.nicotinamide, 200, 1e-9), `NAD⁺+NADH = ${c.nicotinamide}`);
-  ok(near(S.carbon(s), 6 * s.totals.glcSupplied, 1e-9), `炭素：供給 ${(6 * s.totals.glcSupplied).toFixed(3)} ＝ 在庫 ${S.carbon(s).toFixed(3)}`);
+  ok(near(S.carbon(s) + S.carbonOut(s), 6 * s.totals.glcSupplied, 1e-9), `炭素：供給 ${(6 * s.totals.glcSupplied).toFixed(3)} ＝ 在庫 ${S.carbon(s).toFixed(3)} ＋ GLUT で外へ戻った分 ${S.carbonOut(s).toFixed(3)}`);
   ok(minAmt >= 0, `負の物質量なし（最小 ${minAmt.toExponential(2)}）`);
   ok(near(s.totals.extent.pk, s.totals.pyrProduced, 1e-12) && near(s.amounts.pyr, s.totals.pyrProduced, 1e-9), 'ピルビン酸：PK の累積進行量 ＝ 生成累計 ＝ 在庫');
   ok(s.diag.eqViolations === 0 && s.diag.newtonFail === 0, `平衡の行き過ぎ ${s.diag.eqViolations} 件・解法の失敗 ${s.diag.newtonFail} 件（刻みの半分化 ${s.diag.halvings} 回）`);
@@ -87,7 +99,7 @@ console.log('[T4] マクロ表示とミクロ計算の整合');
   // 定常状態（グルコース供給 0.1/秒・NAD⁺ 十分）では、入口と出口の速度がグルコース換算で一致する
   const st = S.createState(); st.amounts.nad = 1e5;
   const mr = withParams(() => { R('glut').vmaxBase = 0.1; }, () => { run(st, 1500); return A.rates(st); });
-  ok(Math.abs(mr.prep - 0.1) < 1e-3 && Math.abs(mr.pay - 0.1) < 1e-3, `定常状態で 供給 0.1 ＝ 入口 ${mr.prep.toFixed(5)} ＝ 出口 ${mr.pay.toFixed(5)}（グルコース換算）`);
+  ok(mr.glut > 0.05 && Math.abs(mr.prep - mr.glut) < 1e-3 && Math.abs(mr.pay - mr.glut) < 1e-3, `定常状態で 供給（GLUT の実際の流束）${mr.glut.toFixed(5)} ＝ 入口 ${mr.prep.toFixed(5)} ＝ 出口 ${mr.pay.toFixed(5)}（グルコース換算）`);
 }
 
 /* ---------- T5 表示切替で状態が変わらない ---------- */
@@ -171,8 +183,8 @@ console.log('[T9] 0.1（v1）セーブデータからの移行（0.1 基準版�
     const bad = checks.filter(c => !c[1]).map(c => c[0]);
     ok(!bad.length, `${name.padEnd(16)} TP ${a1.tp.toFixed(2)} → GAP ${a2.gap.toFixed(3)} + DHAP ${a2.dhap.toFixed(3)}` + (bad.length ? '  ✘ ' + bad.join(', ') : ''));
     // 移行後に計算を続けても保存則が守られる（アルドラーゼの逆反応を含む）
-    const C0 = S.carbon(s), g0 = s.totals.glcSupplied; run(s, 120);
-    if (!near(S.carbon(s), C0 + 6 * (s.totals.glcSupplied - g0), 1e-9)) ok(false, `${name}: 移行後の計算で炭素が保存されない`);
+    const C0 = S.carbon(s) + S.carbonOut(s), g0 = s.totals.glcSupplied; run(s, 120);
+    if (!near(S.carbon(s) + S.carbonOut(s), C0 + 6 * (s.totals.glcSupplied - g0), 1e-9)) ok(false, `${name}: 移行後の計算で炭素が保存されない`);
     migOk.push(name);
   }
   ok(migOk.length === Object.keys(fx).length, '移行後に 120 秒計算を続けても炭素が保存される（アルドラーゼの逆反応を含む）');
@@ -254,7 +266,7 @@ console.log('[T16] 不在時進行（刻み 1 秒）と通常の刻み（0.1 秒
   const a = run(mk(), 600, 0.1), b = run(mk(), 600, 1.0);
   const d = Math.abs(a.totals.pyrProduced - b.totals.pyrProduced) / a.totals.pyrProduced;
   ok(d < 0.02, `600 秒後のピルビン酸累計の差 ${(d * 100).toFixed(2)}%（${a.totals.pyrProduced.toFixed(1)} / ${b.totals.pyrProduced.toFixed(1)}）`);
-  ok(near(S.carbon(b), 6 * b.totals.glcSupplied, 1e-9) && b.diag.eqViolations === 0, '大きな刻みでも保存則・平衡の検査を満たす');
+  ok(near(S.carbon(b) + S.carbonOut(b), 6 * b.totals.glcSupplied, 1e-9) && b.diag.eqViolations === 0, '大きな刻みでも保存則・平衡の検査を満たす');
 }
 
 /* ---------- T17 0.2（v2）セーブからの移行 ---------- */
@@ -500,7 +512,7 @@ console.log('[S3] ピルビン酸の消費量と乳酸の生成量が対応す�
   const e = s.totals.extent;
   ok(near(s.amounts.lac, e.ldh, 1e-9), `乳酸の在庫 ${s.amounts.lac.toFixed(4)} ＝ LDH の累積進行量 ${e.ldh.toFixed(4)}`);
   ok(near(s.amounts.pyr, e.pk - e.ldh, 1e-9), `ピルビン酸の在庫 ${s.amounts.pyr.toFixed(4)} ＝ 生成（PK）${e.pk.toFixed(2)} − 消費（LDH）${e.ldh.toFixed(2)}`);
-  ok(near(S.carbon(s), 6 * s.totals.glcSupplied, 1e-9), '炭素：供給 ＝ 在庫（乳酸を含む）');
+  ok(near(S.carbon(s) + S.carbonOut(s), 6 * s.totals.glcSupplied, 1e-9), '炭素：供給 ＝ 在庫（乳酸を含む）＋ GLUT で外へ戻った分');
   ok(near(s.rp, e.pk * MB.ECONOMY.rpPerExtent, 1e-12), '研究ポイントは PK の進行量だけから入る（乳酸の生成からは入らない）');
   ok(near(80 + (-e.hk - e.pfk + e.pgk + e.pk - e.atpase), s.amounts.atp, 1e-9), 'ATP の在庫 ＝ 初期値 ＋ 解糖系と細胞の仕事の進行量（LDH は ATP の収支に入らない）');
 }
@@ -523,7 +535,7 @@ console.log('[S4] 基質が足りないときも負の物質量が生じない')
   ok(near(xi[j('ldh')], 0.5, 1e-12) && xi[j('atpase')] === 2, `非負性の保証：LDH は不足する NADH の量まで縮み（3 → ${xi[j('ldh')]}）、無関係な反応は縮まない`);
 }
 
-console.log('[S5] 解糖系10反応：LDH が働かないとき、0.2.3 と同じ計算結果になる');
+console.log('[S5] 解糖系10反応：LDH が働かないとき、0.2.3 と同じ計算結果になる（v0.2.0 のコード＋v0.1.2 のパラメータ）');
 {
   const baseDir = path.join(__dirname, 'baseline_0.2.3');      // 0.2.3 の data.js・sim.js の写し（比較専用。変更しない）
   if (!baseDir || !fs.existsSync(baseDir)) ok(true, '（0.2.3 のコードが手元にないため省略。tests の T1〜T28 がすべて通ることで確認）');
@@ -532,8 +544,8 @@ console.log('[S5] 解糖系10反応：LDH が働かないとき、0.2.3 と同�
     for (const f of ['data.js', 'sim.js']) vm.runInContext(fs.readFileSync(path.join(baseDir, f), 'utf8'), ctx);
     const B = ctx.MB.Sim;
     const mk = (Sx) => { const x = Sx.createState(); Sx.addGlucose(x, 400); x.levels.glut = 3; x.levels.pay = 2; x.levels.work = 2; return x; };
-    const a = mk(B), b = mk(S); let maxd = 0;
-    for (let t = 0; t < 1800; t++) { B.step(a, 1); S.step(b, 1); if (t === 600) { B.buy(Object.assign(a, { rp: a.rp + 1e4 }), 'nadsalv'); S.buy(Object.assign(b, { rp: b.rp + 1e4 }), 'nadsalv'); } }
+    const a = mk(B), b = mk(L); let maxd = 0;
+    for (let t = 0; t < 1800; t++) { B.step(a, 1); L.step(b, 1); if (t === 600) { B.buy(Object.assign(a, { rp: a.rp + 1e4 }), 'nadsalv'); L.buy(Object.assign(b, { rp: b.rp + 1e4 }), 'nadsalv'); } }
     for (const k of Object.keys(a.amounts)) maxd = Math.max(maxd, Math.abs(a.amounts[k] - b.amounts[k]));
     ok(maxd === 0 && b.amounts.lac === 0, `1800 秒（途中で NAD⁺ 補充を含む）：0.2.3 の計算と全物質がビット単位で一致（最大差 ${maxd}）、乳酸 0`);
     ok(JSON.stringify(Object.fromEntries(Object.entries(a.totals.extent))) === JSON.stringify(Object.fromEntries(Object.entries(b.totals.extent).filter(([k]) => !['ldh', 'mct', 'lac_clear'].includes(k)))) && ['ldh', 'mct', 'lac_clear'].every(k => b.totals.extent[k] === 0), '反応ごとの累積進行量も一致（LDH・MCT・流出は 0）');
@@ -588,7 +600,7 @@ console.log('[S8] 0.2.3（v4）セーブデータからの移行（0.2.3 のコ�
       ['研究レベル（補充の累計回数を含む）', Object.entries(v4.levels).every(([k, v]) => s.levels[k] === v)],
       ['同定済みの酵素', JSON.stringify(s.knowledge.identified) === JSON.stringify(v4.knowledge.identified)],
       ['解析の進み具合', JSON.stringify(s.knowledge.analysis) === JSON.stringify(v4.knowledge.analysis)],
-      ['累積記録（totals）', JSON.stringify(Object.assign({}, v4.totals, { extent: undefined })) === JSON.stringify(Object.assign({}, s.totals, { extent: undefined })) && JSON.stringify(v4.totals.extent) === JSON.stringify(s.totals.extent)],
+      ['累積記録（totals）', JSON.stringify(Object.assign({}, v4.totals, { extent: undefined })) === JSON.stringify(Object.assign(noRet(s.totals), { extent: undefined })) && JSON.stringify(v4.totals.extent) === JSON.stringify(s.totals.extent) && s.totals.glcReturned === 0],
       ['細胞の再構築回数', s.totals.cultures === v4.totals.cultures],
       ['現在の細胞の記録（補充回数）', s.cell.nadBought === v4.cell.nadBought && s.cell.startedAt === v4.cell.startedAt],
       ['記録タブ・マイルストーン', JSON.stringify(s.log) === JSON.stringify(v4.log) && JSON.stringify(s.milestones) === JSON.stringify(v4.milestones)],
@@ -647,7 +659,7 @@ console.log('[S10] LDH を止めると、従来どおり NAD⁺ 不足が再現�
 
 console.log('[S11] SELF-SUSTAINING（補充なしで解糖系を維持した記録）');
 {
-  const s = withLdh(); s.rp = 1e6;
+  const s = withLdh({ prep: 1 }); s.rp = 1e6;
   run(s, 200);
   S.buy(s, 'nadsalv');
   ok(s.knowledge.regen.since === null && s.knowledge.regen.refillsAfter === 1, 'LDH 獲得後の補充は数えられ、区間が途切れる');
@@ -739,7 +751,7 @@ console.log('[M4] 基質が足りないときも負の物質量が生じない')
   ok(minAmt >= 0, `MCT の Vmax を 3000 倍・流出を 100 倍にした4条件：負の物質量なし（最小 ${minAmt.toExponential(2)}）`);
 }
 
-console.log('[M5] MCT が働かないとき、0.3 と同じ計算結果になる（乳酸は従来どおり細胞内に蓄積）');
+console.log('[M5] MCT が働かないとき、0.3 と同じ計算結果になる（乳酸は従来どおり細胞内に蓄積。v0.2.0 のコード＋v0.1.2 のパラメータ）');
 {
   const baseDir = path.join(__dirname, 'baseline_0.3');
   const ctx = { console, Date, Math, JSON, Float64Array, Array, Object }; ctx.globalThis = ctx; vm.createContext(ctx);
@@ -747,11 +759,11 @@ console.log('[M5] MCT が働かないとき、0.3 と同じ計算結果になる
   const B = ctx.MB.Sim;
   const mk = Sx => { const x = Sx.createState(); x.levels.micro = 1; for (const id of ctx.MB.MICRO_IDS) x.levels['enz_' + id] = 3;
     Object.assign(x.levels, { glut: 6, prep: 4, pay: 4, work: 3, nadregen: 1, enz_ldh: 2 }); x.rp = 1e6; return x; };
-  const a = mk(B), b = mk(S); let maxd = 0;
+  const a = mk(B), b = mk(L); let maxd = 0;
   for (let t = 0; t < 2400; t++) {
-    if (t === 900) { B.buy(a, 'nadsalv'); S.buy(b, 'nadsalv'); }
-    if (t === 1500) { B.newCulture(a); S.newCulture(b); }
-    B.step(a, 1); S.step(b, 1);
+    if (t === 900) { B.buy(a, 'nadsalv'); L.buy(b, 'nadsalv'); }
+    if (t === 1500) { B.newCulture(a); L.newCulture(b); }
+    B.step(a, 1); L.step(b, 1);
   }
   for (const k of Object.keys(a.amounts)) maxd = Math.max(maxd, Math.abs(a.amounts[k] - b.amounts[k]));
   ok(maxd === 0 && b.amounts.lacOut === 0 && b.amounts.lac > 1000, `LDH あり・MCT なしで 2400 秒（補充・新しい細胞を含む）：0.3 の計算と全物質がビット単位で一致（最大差 ${maxd}）。乳酸 ${b.amounts.lac.toFixed(0)} が細胞内に蓄積、細胞外 0`);
@@ -826,7 +838,7 @@ console.log('[M10] 0.3（v5）セーブデータからの移行（0.3 のコー�
       ['同定・解析', JSON.stringify(s.knowledge.identified) === JSON.stringify(v5.knowledge.identified) && JSON.stringify(s.knowledge.analysis) === JSON.stringify(v5.knowledge.analysis)],
       ['SELF-SUSTAINING の記録', JSON.stringify(s.knowledge.regen) === JSON.stringify(v5.knowledge.regen)],
       ['比較実験の停止', JSON.stringify(s.switches) === JSON.stringify(v5.switches)],
-      ['累積記録・細胞・補充', JSON.stringify(s.totals) === JSON.stringify(v5.totals) && JSON.stringify(s.cell) === JSON.stringify(v5.cell)],
+      ['累積記録・細胞・補充', JSON.stringify(noRet(s.totals)) === JSON.stringify(v5.totals) && s.totals.glcReturned === 0 && JSON.stringify(s.cell) === JSON.stringify(v5.cell)],
       ['記録タブ・マイルストーン', JSON.stringify(s.log) === JSON.stringify(v5.log) && JSON.stringify(s.milestones) === JSON.stringify(v5.milestones)],
       ['物質量（細胞内の乳酸を含む）そのまま', Object.keys(v5.amounts).every(id => s.amounts[id] === v5.amounts[id])],
       ['新規：細胞外の乳酸 0・MCT 未同定・未研究・つり合いの記録は空', s.amounts.lacOut === 0 && s.levels.tr_mct === 0 && s.levels.lacexit === 0 && JSON.stringify(s.knowledge.balance) === '{"since":null,"best":0}']
@@ -902,16 +914,16 @@ console.log('[M14] 経済：MCT の獲得（自動プレイ 90 分）');
   }
 }
 
-console.log('[M15] 0.4.1：計算は 0.4 と同じ。0.4（v6）のセーブをそのまま読める');
+console.log('[M15] v0.2.0 のコード＋v0.1.2 のパラメータの計算は 0.4 と同じ。0.4（v6）のセーブを v7 に移行して読める');
 {
   const ctx = { console, Date, Math, JSON, Float64Array, Array, Object }; ctx.globalThis = ctx; vm.createContext(ctx);
   for (const f of ['data.js', 'sim.js']) vm.runInContext(fs.readFileSync(path.join(__dirname, 'baseline_0.4', f), 'utf8'), ctx);
   const B = ctx.MB.Sim;
   const mk = (Sx, M) => { const x = Sx.createState(); x.levels.micro = 1; M.MICRO_IDS.forEach(i => { x.levels['enz_' + i] = 6; });
     Object.assign(x.levels, { glut: 10, prep: 8, pay: 8, work: 7, nadregen: 1, enz_ldh: 5, lacexit: 1, tr_mct: 3 }); x.rp = 1e6; return x; };
-  const a = mk(B, ctx.MB), b = mk(S, MB);
+  const a = mk(B, ctx.MB), b = mk(L, LM);
   for (let t = 0; t < 7200; t++) {
-    for (const [Sx, x] of [[B, a], [S, b]]) {
+    for (const [Sx, x] of [[B, a], [L, b]]) {
       if (t === 2000) Sx.newCulture(x); if (t === 3000) Sx.buy(x, 'nadsalv');
       if (t === 4000) Sx.setSwitch(x, 'mctOff', true); if (t === 4600) Sx.setSwitch(x, 'mctOff', false);
       Sx.step(x, 1);
@@ -919,14 +931,17 @@ console.log('[M15] 0.4.1：計算は 0.4 と同じ。0.4（v6）のセーブを�
   }
   ok(Object.keys(a.amounts).every(k => a.amounts[k] === b.amounts[k]) && JSON.stringify(a.totals.extent) === JSON.stringify(b.totals.extent) && a.rp === b.rp,
     '2 時間（MCT 獲得済み・新しい細胞・補充・MCT の停止と再開を含む）：0.4 と全物質・進行量・RP がビット単位で一致');
-  ok(B.SAVE_VERSION === S.SAVE_VERSION && ctx.MB.DATA_VERSION === MB.DATA_VERSION, `セーブの版は 0.4 と同じ v${S.SAVE_VERSION}（移行は不要）`);
+  ok(B.SAVE_VERSION === 6 && S.SAVE_VERSION === 7 && MB.DATA_VERSION === 7, `セーブの版は 0.4 の v6 → v${S.SAVE_VERSION}（データの版 v${MB.DATA_VERSION}）`);
   const fx = JSON.parse(fs.readFileSync(path.join(__dirname, 'fixtures/v6_saves.json'), 'utf8'));
   for (const [name, v6] of Object.entries(fx)) {
     const s = S.deserialize(JSON.stringify(v6));
-    const same = JSON.stringify(JSON.parse(S.serialize(s)), (k, v) => k === 'lastSaved' ? 0 : v) === JSON.stringify(v6, (k, v) => k === 'lastSaved' ? 0 : v);
+    // v7 に移行して保存すると、変わるのは版の番号と、外へ戻ったグルコースの累計（glcReturned: 0）だけ
+    const rs = JSON.parse(S.serialize(s)); const keep = rs.totals.glcReturned; rs.totals = noRet(rs.totals);
+    const v6x = Object.assign({}, v6, { saveVersion: 7, dataVersion: 7 });
+    const same = keep === 0 && JSON.stringify(rs, (k, v) => k === 'lastSaved' ? 0 : v) === JSON.stringify(v6x, (k, v) => k === 'lastSaved' ? 0 : v);
     const C0 = S.carbon(s) + S.carbonOut(s), g0 = s.totals.glcSupplied; run(s, 600);
     const cOk = near(S.carbon(s) + S.carbonOut(s), C0 + 6 * (s.totals.glcSupplied - g0), 1e-9);
-    ok(same && cOk, `${name.padEnd(22)} 読み込み → 保存で内容が1ビットも変わらない。続けて 600 秒計算しても炭素の収支が合う（細胞外 ${v6.amounts.lacOut.toFixed(0)}・停止 ${JSON.stringify(v6.switches)}）`);
+    ok(same && cOk, `${name.padEnd(22)} 読み込み → 保存で、版の番号と glcReturned（0）以外は1ビットも変わらない。続けて 600 秒計算しても炭素の収支が合う（細胞外 ${v6.amounts.lacOut.toFixed(0)}・停止 ${JSON.stringify(v6.switches)}）`);
   }
 }
 

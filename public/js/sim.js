@@ -1,5 +1,5 @@
 /* =========================================================================
- * METABOLISM — sim.js（Prototype 0.4）
+ * METABOLISM — sim.js（Prototype 0.4 ／ v0.2.0：調節の係数、GLUT の可逆輸送、セーブ v7）
  * シミュレーション層。DOM を一切参照しない（Node でもそのまま動く）。
  *
  * 1 刻みの処理（それぞれ独立した関数。GPT 審査 0.2 実装前 必須修正1・2）
@@ -12,7 +12,7 @@
   'use strict';
   const MB = (root.MB = root.MB || {});
 
-  const SAVE_VERSION = 6;
+  const SAVE_VERSION = 7;
   const H_REALTIME = 0.1;        // 通常の刻み（秒）
   const H_OFFLINE = 1.0;         // 不在時進行の刻み（秒）
   const MAX_HALVING = 8;         // 刻みを半分にする回数の上限
@@ -40,6 +40,8 @@
     if (!r.thermo || !r.thermo.reversible) return null;
     // 0.4 MCT：乳酸と H⁺ の共輸送。[乳酸]外/[乳酸]内 ＝ [H⁺]内/[H⁺]外 ＝ 10^(pH外 − pH内)（pH 一定）
     if (r.thermo.keq === 'mct') return Math.pow(10, MB.ENVIRONMENT.pHout - MB.ENVIRONMENT.pHin);
+    // v0.2.0 GLUT：促進拡散。細胞外のグルコース（一定）を K に繰り込む → 平衡で [Glc]内 ＝ [Glc]外
+    if (r.thermo.keq === 'glut') return MB.GLUT.glcOut;
     const K = Math.exp(-r.thermo.dG0 / MB.UNITS.RT_kJ);          // 教科書の K′eq
     const M_per_u = MB.UNITS.mM_per_u * 1e-3;
     switch (r.thermo.keqDim) {
@@ -73,7 +75,8 @@
     return {
       saveVersion: SAVE_VERSION, dataVersion: MB.DATA_VERSION,
       t: 0, amounts: freshAmounts(), levels, rp: 0,
-      totals: { pyrProduced: 0, glcSupplied: 0, glcConsumed: 0, atpHydrolyzed: 0, nadAdded: 0, rpEarned: 0, cultures: 0,
+      // glcSupplied：細胞に入ったグルコース（手で入れた分 ＋ GLUT で入った分）。glcReturned：GLUT で細胞の外へ戻った分（v0.2.0）
+      totals: { pyrProduced: 0, glcSupplied: 0, glcReturned: 0, glcConsumed: 0, atpHydrolyzed: 0, nadAdded: 0, rpEarned: 0, cultures: 0,
                 extent: {} },               // 反応ごとの累積進行量（将来のエネルギー層の土台）
       cell: { nadBought: 0, startedAt: 0 },   // 現在の細胞だけの記録（新しい細胞で初期化）
       knowledge: { analysis: {}, identified: {}, regen: freshRegen(), balance: freshBalance() },   // 解析の知識（新しい細胞でも保持）
@@ -104,6 +107,19 @@
     return v;
   }
 
+  /* ---------------- 調節の係数（v0.2.0） ----------------
+   *  inhibition    ： Ki / (Ki ＋ E)                                 （HK：G6P）
+   *  atpInhibition ： 1 / (1 ＋ ((ATP/Ki) / (1 ＋ ADP/Ka))^n)          （PFK-1：ATP による阻害と ADP による解除）
+   *  activation    ： 1 ＋ α × E / (Ka ＋ E)                           （PK：F1,6BP によるフィードフォワード）
+   *  どれも速さ（Vmax）にかかる係数で、平衡（K_game）は変えない。 */
+  function regFactor(g, get) {
+    const E = Math.max(0, get(g.effector));
+    if (g.kind === 'inhibition') return g.ki / (g.ki + E);
+    if (g.kind === 'atpInhibition') return 1 / (1 + Math.pow((E / g.ki) / (1 + Math.max(0, get(g.antagonist)) / g.ka), g.n));
+    if (g.kind === 'activation') return 1 + g.alpha * E / (g.ka + E);
+    return 1;
+  }
+
   /* ---------------- 反応速度 ---------------- */
   // get(s) で物質量を読む。返り値は u/秒（可逆反応は負＝逆向き）
   function rate(r, Vm, get) {
@@ -112,9 +128,7 @@
     if (k.type === 'mm') {
       let v = Vm;
       for (const [s, Km] of Object.entries(k.km)) { const S = Math.max(0, get(s)); v *= S / (Km + S); }
-      for (const g of r.regulation || []) {
-        if (g.kind === 'inhibition') { const E = Math.max(0, get(g.effector)); v *= g.ki / (g.ki + E); }
-      }
+      for (const g of r.regulation || []) v *= regFactor(g, get);
       return v;
     }
     // 可逆・飽和型（熱力学的に矛盾しない形）
@@ -296,7 +310,7 @@
       ext[r.id] = (ext[r.id] || 0) + e;
       if (r.id === 'pk') state.totals.pyrProduced += e;
       if (r.id === 'hk') state.totals.glcConsumed += e;
-      if (r.id === 'glut') state.totals.glcSupplied += e;
+      if (r.id === 'glut') { if (e >= 0) state.totals.glcSupplied += e; else state.totals.glcReturned += -e; }   // 向きごとに数える（v0.2.0）
       if (r.id === 'atpase') state.totals.atpHydrolyzed += e;
       if (r.id === ECON.rpSource) { state.rp += e * ECON.rpPerExtent; state.totals.rpEarned += e * ECON.rpPerExtent; }
       const inst = dt > 0 ? e / dt : 0;
@@ -382,10 +396,10 @@
     if (k.type === 'mm') {
       let worst = null, wv = 1;
       for (const [s, Km] of Object.entries(k.km)) { const S = get(s), f = S / (Km + S); if (f < wv) { wv = f; worst = s; } }
-      let reg = 1;
-      for (const g of r.regulation || []) if (g.kind === 'inhibition') reg *= g.ki / (g.ki + get(g.effector));
+      let reg = 1, regBy = null;                     // 抑える向きの調節だけを見る（活性化は律速の説明に使わない）
+      for (const g of r.regulation || []) { const f = regFactor(g, get); if (f < 1) { reg *= f; regBy = regBy || g.effector; } }
       if (worst && wv < 0.05) return { kind: 'depleted', species: worst };
-      if (reg < 0.5 && reg < wv) return { kind: 'regulated', effector: r.regulation[0].effector, factor: reg };
+      if (reg < 0.5 && reg < wv) return { kind: 'regulated', effector: regBy, factor: reg };
       if (worst && wv < 0.5) return { kind: 'substrate', species: worst, sat: wv };
       return { kind: 'enzyme' };
     }
@@ -416,8 +430,10 @@
     for (const id of FREE) { const c = SP[id].conserved; if (c) g[c] = (g[c] || 0) + (SP[id].initial || 0) + (state.extAdded[id] || 0); }
     return g;
   }
-  /* 系の外へ出た炭素（細胞の周りから運び去られた乳酸。0.4）。炭素の収支：供給 ＝ 在庫 ＋ 系の外へ出た分 */
-  function carbonOut(state) { return 3 * (state.totals.extent.lac_clear || 0); }
+  /* 系の外へ出た炭素（細胞の周りから運び去られた乳酸。0.4 ／ GLUT で細胞の外へ戻ったグルコース。v0.2.0）。
+   *  細胞の外のグルコースは一定のリザーバーで量を追跡しないので、戻った分は「系の外へ出た分」として数える。
+   *  炭素の収支：6 × 入ったグルコース（glcSupplied）＝ 在庫 ＋ 系の外へ出た分 */
+  function carbonOut(state) { return 3 * (state.totals.extent.lac_clear || 0) + 6 * (state.totals.glcReturned || 0); }
   function carbon(state) {
     let C = 0;
     for (const id of FREE) C += (SP[id].carbon || 0) * state.amounts[id];
@@ -593,6 +609,12 @@
       s.knowledge.balance = freshBalance();
       s.saveVersion = 6;
       return s;
+    },
+    7: s => {
+      // v0.2.0：PFK-1・PK の調節と GLUT の可逆輸送（計算の式の変更。保存する項目は、外へ戻ったグルコースの累計だけ増える）。
+      //  既存の値には触れない。glcReturned は 0（deserialize の既定値）。溜まっていた F1,6BP などは、そのまま新しい式で計算を続ける
+      s.saveVersion = 7;
+      return s;
     }
   };
   function migrate(s) {
@@ -600,27 +622,96 @@
     while (v < SAVE_VERSION) { v++; if (MIGRATIONS[v]) s = MIGRATIONS[v](s); }
     return s;
   }
+  /* v0.1.2：読み込む内容は信用しない（書き出した文字列の貼り付けにも使うため）。
+   *  知っている項目だけを、型と範囲を確かめてから写す。__proto__ などのキーは写さない（Object.assign を使わない）。
+   *  正しいセーブの値は、これまでと1ビットも変わらない。 */
+  const NUM_MAX = 1e15;                                   // 物質量・研究ポイント・累計の上限（これを超える値は壊れたデータとみなす）
+  const MAX_LOG = 40, MAX_TEXT = 1000, MAX_MILESTONES = 100;
+  const isNum = v => typeof v === 'number' && isFinite(v) && Math.abs(v) <= NUM_MAX;
+  const own = (o, k) => o != null && typeof o === 'object' && Object.prototype.hasOwnProperty.call(o, k);
+  const SAFE_KEY = /^[a-z0-9_]{1,40}$/;
+  const PROTEIN_IDS = [...MB.MICRO_IDS, 'ldh', 'mct'];
+  function copyNums(src, keys, dst) {                   // keys にある項目のうち、数値のものだけを写す（元の並び順のまま）
+    dst = dst || {};
+    if (!src || typeof src !== 'object') return dst;
+    const allow = new Set(keys);
+    for (const k of Object.keys(src)) if (allow.has(k) && isNum(src[k])) dst[k] = src[k];
+    return dst;
+  }
+  function copyNumOrNull(src, dst) {                    // dst が持っている項目だけ、数値か null を写す
+    for (const k of Object.keys(dst)) if (own(src, k) && (src[k] === null || isNum(src[k]))) dst[k] = src[k];
+    return dst;
+  }
   function deserialize(json) {
     let s;
     try { s = JSON.parse(json); } catch (e) { return null; }
+    if (!s || typeof s !== 'object' || Array.isArray(s)) return null;
+    try { s = migrate(s); } catch (e) { return null; }   // 壊れたデータで移行が失敗しても、例外を外に出さない
     if (!s || typeof s !== 'object') return null;
-    s = migrate(s);
     const base = createState();
-    for (const id of FREE) if (s.amounts && isFinite(+s.amounts[id])) base.amounts[id] = Math.max(0, +s.amounts[id]);
-    for (const id in base.levels) if (s.levels && isFinite(+s.levels[id])) base.levels[id] = +s.levels[id];
-    Object.assign(base.totals, s.totals || {});
-    base.totals.extent = Object.assign({}, (s.totals && s.totals.extent) || {});
-    base.extAdded = s.extAdded || {};
-    if (s.cell) base.cell = { nadBought: +s.cell.nadBought || 0, startedAt: +s.cell.startedAt || 0 };
-    if (s.knowledge) base.knowledge = { analysis: Object.assign({}, s.knowledge.analysis), identified: Object.assign({}, s.knowledge.identified),
-                                        regen: Object.assign(freshRegen(), s.knowledge.regen || {}),
-                                        balance: Object.assign(freshBalance(), s.knowledge.balance || {}) };
-    base.switches = Object.assign({}, s.switches || {});
-    base.milestones = s.milestones || {};
-    base.log = Array.isArray(s.log) ? s.log : [];
-    base.rp = +s.rp || 0; base.t = +s.t || 0;
-    base.lastSaved = s.lastSaved || Date.now();
+    const am = own(s, 'amounts') ? s.amounts : null;
+    for (const id of FREE) if (own(am, id) && isFinite(+am[id]) && Math.abs(+am[id]) <= NUM_MAX) base.amounts[id] = Math.max(0, +am[id]);
+    const lv = own(s, 'levels') ? s.levels : null;
+    for (const id in base.levels) if (own(lv, id) && isFinite(+lv[id]) && Math.abs(+lv[id]) <= NUM_MAX) base.levels[id] = +lv[id];
+    const to = own(s, 'totals') ? s.totals : null;
+    copyNums(to, Object.keys(base.totals).filter(k => k !== 'extent'), base.totals);
+    base.totals.extent = copyNums(own(to, 'extent') ? to.extent : null, Object.keys(R));
+    base.extAdded = copyNums(own(s, 'extAdded') ? s.extAdded : null, Object.keys(SP));
+    if (own(s, 'cell') && s.cell && typeof s.cell === 'object') base.cell = { nadBought: isNum(+s.cell.nadBought) ? +s.cell.nadBought || 0 : 0, startedAt: isNum(+s.cell.startedAt) ? +s.cell.startedAt || 0 : 0 };
+    const kn = own(s, 'knowledge') ? s.knowledge : null;
+    if (kn && typeof kn === 'object') base.knowledge = {
+      analysis: copyNums(own(kn, 'analysis') ? kn.analysis : null, PROTEIN_IDS),
+      identified: copyNums(own(kn, 'identified') ? kn.identified : null, PROTEIN_IDS),
+      regen: copyNumOrNull(own(kn, 'regen') ? kn.regen : null, freshRegen()),
+      balance: copyNumOrNull(own(kn, 'balance') ? kn.balance : null, freshBalance()) };
+    base.switches = {};
+    if (own(s, 'switches')) for (const k of ['ldhOff', 'mctOff']) if (own(s.switches, k) && s.switches[k] === true) base.switches[k] = true;
+    base.milestones = {};
+    const ms = own(s, 'milestones') ? s.milestones : null;
+    if (ms && typeof ms === 'object') for (const k of Object.keys(ms).slice(0, MAX_MILESTONES)) if (SAFE_KEY.test(k) && isNum(ms[k])) base.milestones[k] = ms[k];
+    base.log = [];
+    if (own(s, 'log') && Array.isArray(s.log)) for (const l of s.log) {
+      if (base.log.length >= MAX_LOG) break;
+      if (l && typeof l === 'object' && isNum(l.t) && typeof l.text === 'string') base.log.push({ t: l.t, text: l.text.slice(0, MAX_TEXT) });
+    }
+    base.rp = isNum(+s.rp) ? +s.rp || 0 : 0; base.t = isNum(+s.t) ? +s.t || 0 : 0;
+    base.lastSaved = isNum(s.lastSaved) && s.lastSaved ? s.lastSaved : Date.now();
     return base;
+  }
+
+  /* v0.1.2：読み込んだ state 全体のつじつま（外から貼り付けたセーブを受け入れる前に確かめる）。
+   *  個々の値の型・範囲は deserialize が確かめる。ここでは値どうしの関係を見る。返り値は問題の一覧（空なら問題なし）。
+   *  ゲームの計算で起こりうる状態はすべて通る（v1〜v6 の全フィクスチャと、長時間の計算で確認）。 */
+  function checkIntegrity(state) {
+    const bad = [], tol = (a, b) => Math.abs(a - b) <= 1e-6 * Math.max(1, Math.abs(a), Math.abs(b));
+    const cons = conservation(state), exp = expectedConservation(state);
+    if (!tol(cons.adenylate, exp.adenylate)) bad.push(`ATP＋ADP の合計（${cons.adenylate}）が、あるべき量（${exp.adenylate}）と合わない`);
+    if (!tol(cons.nicotinamide, exp.nicotinamide)) bad.push(`NAD⁺＋NADH の合計（${cons.nicotinamide}）が、あるべき量（${exp.nicotinamide}）と合わない`);
+    for (const id in state.extAdded) if (!(SP[id] && SP[id].conserved) || state.extAdded[id] < 0) bad.push(`外から加えた物質の記録（${id}）が正しくない`);
+    for (const u of MB.UPGRADES) {
+      const lv = state.levels[u.id] || 0;
+      if (!Number.isInteger(lv) || lv < 0 || lv > u.maxLevel) bad.push(`研究「${u.id}」の Lv（${lv}）が 0〜${u.maxLevel} の整数でない`);
+    }
+    const t = state.t;
+    if (!(t >= 0)) bad.push('経過時間が負');
+    if (!(state.rp >= 0)) bad.push('研究ポイントが負');
+    for (const [k, v] of Object.entries(state.totals)) if (k !== 'extent' && !(v >= 0)) bad.push(`累計「${k}」が負`);
+    if (!Number.isInteger(state.totals.cultures || 0)) bad.push('細胞の数が整数でない');
+    const nb = state.cell.nadBought || 0;
+    if (!Number.isInteger(nb) || nb < 0 || nb > (state.levels.nadsalv || 0)) bad.push('この細胞での NAD⁺ 補充の回数が、累計の回数と合わない');
+    if (state.cell.startedAt > t + 1e-6 || state.cell.startedAt < 0) bad.push('いまの細胞を始めた時刻が、経過時間の外にある');
+    for (const [k, v] of Object.entries(state.milestones)) if (v < 0 || v > t + 1e-6) bad.push(`記録「${k}」の時刻が、経過時間の外にある`);
+    const kn = state.knowledge;
+    for (const [id, v] of Object.entries(kn.identified)) if (v < 0 || v > t + 1e-6) bad.push(`「${id}」を同定した時刻が、経過時間の外にある`);
+    for (const [id, v] of Object.entries(kn.analysis)) if (v < 0) bad.push(`「${id}」の解析の進み具合が負`);
+    for (const g of [kn.regen, kn.balance]) if (g.since != null && (g.since < 0 || g.since > t + 1e-6)) bad.push('記録中の区間の始まりが、経過時間の外にある');
+    return bad;
+  }
+
+  /* 表示用：反応 id のいまの調節の係数（調節ごと）。物質量には触れない（v0.2.0） */
+  function regulationFactors(id, state) {
+    const get = s => state.amounts[s] || 0;
+    return (R[id].regulation || []).map(g => ({ kind: g.kind, effector: g.effector, factor: regFactor(g, get) }));
   }
 
   function catchUp(state, now) {
@@ -632,12 +723,12 @@
 
   MB.Sim = {
     SAVE_VERSION, ECON, MANUAL_GLC, FREE, COMPUTED_IDS: COMPUTED.map(r => r.id),
-    createState, step, vmax, kGame: id => KG[id], massActionRatio: (id, state) => massActionRatio(R[id], s => state.amounts[s] || 0),
+    createState, step, vmax, regulationFactors, kGame: id => KG[id], massActionRatio: (id, state) => massActionRatio(R[id], s => state.amounts[s] || 0),
     netRates, conservation, expectedConservation, carbon, carbonOut, levelKey,
     balanceStatus: state => { const g = state.knowledge.balance; return g.since == null ? null : { seconds: state.t - g.since, best: g.best }; },
     addGlucose, upgradeCost, isAvailable, canBuy, buy, newCulture, addNote, forecast, compareUpgrade, setSwitch, regenStatus,
     analyzing, analysisProgress, stageOf, specOf, isIdentified: identified,
-    serialize, deserialize, migrate, catchUp,
+    serialize, deserialize, migrate, catchUp, checkIntegrity,
     reaction: id => R[id], upgrade: id => U[id],
     // テスト用（内部の部品を個別に検証するため）
     _internal: { solveImplicit, limitByAvailability, checkEquilibrium, rates, toVec, vmaxList, IDX, NM, COMPUTED }

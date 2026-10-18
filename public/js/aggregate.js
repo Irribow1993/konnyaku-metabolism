@@ -40,6 +40,9 @@
         const l = L[id];
         if (l && l.kind === 'depleted' && l.species === 'atp') return { kind: 'stopped', reason: 'atp', at: id };
       }
+      // v0.2.0：PFK-1 が ATP で抑えられているときは、それを先に示す（HK の抑制は、その結果 G6P が増えたため）
+      const pfk = L.pfk;
+      if (pfk && pfk.kind === 'regulated') return { kind: 'regulated', at: 'pfk', factor: pfk.factor };
       const hk = L.hk;
       if (hk && hk.kind === 'regulated') return { kind: 'regulated', at: 'hk', factor: hk.factor };
       if (hk && hk.kind === 'depleted' && hk.species === 'glc') return { kind: 'waiting' };

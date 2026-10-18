@@ -40,7 +40,7 @@ async def main():
         print('[R1] 初回起動（公開時の画面）')
         ctx, pg = await ctx_page()
         await pg.goto(BASE); await pg.wait_for_timeout(900)
-        ok(await pg.title() == 'METABOLISM — 代謝のインクリメンタルゲーム' and (await pg.text_content('#ver')).strip() == 'v0.1.1', 'タイトルとバージョン v0.1.1')
+        ok(await pg.title() == 'METABOLISM — 代謝のインクリメンタルゲーム' and (await pg.text_content('#ver')).strip() == 'v0.2.0', 'タイトルとバージョン v0.2.0')
         ok(await pg.is_visible('#sheet') and '遊び方' in await pg.text_content('#sheet-title'), '初回は「遊び方」が自動で開く')
         body = await pg.text_content('#sheet-body')
         ok(all(k in body for k in ['グルコースを入れる', '研究ポイント', '次の目標', '新しい細胞で再開', '保存', '単純化']), '遊び方：基本の操作・タブ・保存・単純化への案内')
@@ -68,7 +68,7 @@ async def main():
         for _ in range(4): await pg.tap('#btn-glc'); await pg.wait_for_timeout(120)
         await pg.wait_for_timeout(11500)                         # 自動保存（約10秒ごと）
         s1 = await saved(pg)
-        ok(s1 is not None and s1['saveVersion'] == 6 and s1['totals']['glcSupplied'] >= 40 and s1['t'] > 8, f"約10秒で自動保存される（v{s1 and s1['saveVersion']}・経過 {s1 and round(s1['t'])} 秒・グルコース {s1 and s1['totals']['glcSupplied']}）")
+        ok(s1 is not None and s1['saveVersion'] == 7 and s1['totals']['glcSupplied'] >= 40 and s1['t'] > 8, f"約10秒で自動保存される（v{s1 and s1['saveVersion']}・経過 {s1 and round(s1['t'])} 秒・グルコース {s1 and s1['totals']['glcSupplied']}）")
         await pg.reload(); await pg.wait_for_timeout(900)
         ok(not await pg.is_visible('#sheet'), '2回目からは遊び方は自動で開かない')
         await pg.tap('nav.tabs button[data-tab=detail]'); await pg.wait_for_timeout(150)
@@ -95,7 +95,7 @@ async def main():
 
         print('[R4] 不在時の進行')
         d = json.loads(json.dumps(s3)); d['lastSaved'] = int(time.time() * 1000) - 3600 * 1000; d['amounts']['glc'] = 300
-        ctx, pg = await ctx_page(init=f"if (!sessionStorage.getItem('seeded')) {{ localStorage.setItem('{KEY}', {json.dumps(json.dumps(d))}); sessionStorage.setItem('seeded','1'); }}")
+        ctx, pg = await ctx_page(init=f"if (!window.name.includes('seeded')) {{ localStorage.setItem('{KEY}', {json.dumps(json.dumps(d))}); window.name = 'seeded'; }}")
         await pg.goto(BASE); await pg.wait_for_timeout(1500)
         ok('留守のあいだの 1:00:00 を進めました' in await pg.text_content('#toast'), '1時間ぶりに開くと「留守のあいだの 1:00:00 を進めました」')
         await pg.tap('nav.tabs button[data-tab=detail]'); await pg.wait_for_timeout(150); await pg.tap('#btn-save'); await pg.wait_for_timeout(200)
@@ -108,7 +108,7 @@ async def main():
         await ctx.close()
 
         print('[R5] 壊れたセーブ・保存できない環境')
-        ctx, pg = await ctx_page(init=f"if (!sessionStorage.getItem('seeded')) {{ localStorage.setItem('{KEY}', '{{broken json'); sessionStorage.setItem('seeded','1'); }}")
+        ctx, pg = await ctx_page(init=f"if (!window.name.includes('seeded')) {{ localStorage.setItem('{KEY}', '{{broken json'); window.name = 'seeded'; }}")
         n0 = len(errors)
         await pg.goto(BASE); await pg.wait_for_timeout(1500)
         ok(len(errors) == n0 and await pg.is_visible('#btn-glc') and '0' in await pg.text_content('#hud-rp'), '壊れたセーブでもエラーにならず、最初から始まる')
@@ -129,8 +129,17 @@ async def main():
         fx['lastSaved'] = int(time.time() * 1000)
         for name, vp, touch in sizes:
             ctx, pg = await ctx_page(vp=vp, touch=touch, scale=1 if not touch else 2,
-                                     init=f"if (!sessionStorage.getItem('seeded')) {{ localStorage.setItem('{KEY}', {json.dumps(json.dumps(fx))}); sessionStorage.setItem('seeded','1'); }}")
+                                     init=f"if (!window.name.includes('seeded')) {{ localStorage.setItem('{KEY}', {json.dumps(json.dumps(fx))}); window.name = 'seeded'; }}")
             await pg.goto(BASE); await pg.wait_for_timeout(1000)
+            # v0.1.2：LACTATE BALANCE 達成済みのセーブなので、まず「第1章 完」が出る。画面に収まり（はみ出す分はカードの中でスクロール）、閉じられること
+            ch = await pg.evaluate("""() => { const c = document.querySelector('#event-ch1 .ev-card'), e = document.getElementById('event-ch1');
+              if (!c || e.hidden) return null; const r = c.getBoundingClientRect();
+              return { top: r.top, bottom: r.bottom, w: r.width, sw: document.documentElement.scrollWidth, iw: innerWidth, ih: innerHeight }; }""")
+            ok(ch is not None and ch['top'] >= 0 and ch['bottom'] <= ch['ih'] + 1 and ch['sw'] <= ch['iw'],
+               f"{name}：「第1章 完」の画面が出て、画面の中に収まる" + (f"（高さ {ch['bottom'] - ch['top']:.0f}/{ch['ih']}px）" if ch else ''))
+            await shot(pg, 'R6_ch1_' + name)
+            await pg.locator('#ch1-go').scroll_into_view_if_needed(); await pg.click('#ch1-go'); await pg.wait_for_timeout(200)
+            ok(not await pg.is_visible('#event-ch1'), f'{name}：「このまま続ける」で閉じられる')
             m = await pg.evaluate("""() => ({ sw: document.documentElement.scrollWidth, iw: innerWidth,
               bar: document.querySelector('.bar').getBoundingClientRect().height, pill: document.querySelector('#rp-pill').getBoundingClientRect(),
               tabs: document.querySelector('nav.tabs').getBoundingClientRect(), feed: document.querySelector('#btn-glc').getBoundingClientRect(),

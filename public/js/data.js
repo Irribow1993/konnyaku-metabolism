@@ -1,5 +1,5 @@
 /* =========================================================================
- * METABOLISM — data.js（Prototype 0.4）
+ * METABOLISM — data.js（Prototype 0.4 ／ v0.2.0：PFK-1・PK の調節、GLUT の可逆輸送）
  * 代謝物・反応・研究の「定義データ」。ロジックは含まない。
  *
  * ■ 単位系（GPT 審査 0.2 実装前 必須修正3）
@@ -15,7 +15,7 @@
   'use strict';
   const MB = (root.MB = root.MB || {});
 
-  MB.DATA_VERSION = 6;
+  MB.DATA_VERSION = 7;
 
   /* 細胞の環境（0.3）
    *  ANAEROBIC ＝ この Prototype では、酸素を利用したミトコンドリアでの NADH 再酸化を利用できない条件としてモデル化する。
@@ -44,6 +44,15 @@
     rpPerExtent: 1.0,        // ピルビン酸 1 u あたりの RP
     manualGlc: 10            // 手動投与 1 回あたりのグルコース
   };
+
+  /* v0.2.0：グルコース輸送体（GLUT）。促進拡散（ATP を使わない、濃度差に従う双方向の輸送）
+   *  細胞の外のグルコースは一定のリザーバーとみなす（血糖のように、つねに補われる。簡略化 S16）。
+   *  速度：対称な輸送体の式  J ＝ Vmax ×（G外 − G内）/（Km ＋ G外 ＋ G内）
+   *        G外 は一定なので、J ＝ Jmax ×（1 − G内/G外）/（1 ＋ G内/(Km ＋ G外)）と書ける。
+   *        Jmax ＝ Vmax × G外/(Km ＋ G外) ＝「最大輸送能力」（細胞の中のグルコースが 0 のときの取り込みの速さ）。研究はこれを上げる。
+   *  平衡：G内 ＝ G外 で正味 0。G内 ＞ G外 なら外へ出る（手で入れたグルコースが多すぎるときなど）。
+   *  値：G外 50 u（名目 5 mM。空腹時の血糖値の目安）、Km 20 u（名目 2 mM。GLUT1 を参考にしたゲーム値） */
+  MB.GLUT = { glcOut: 50, km: 20 };
 
   MB.UNITS = {
     mM_per_u: 0.1,          // 1 u = 0.1 mM（名目）
@@ -78,6 +87,8 @@
     lac:   { name: '乳酸',                         abbr: 'Lac',     pool: 'free', initial: 0,   carbon: 3, group: 'lac',
              exits: ['mct'], futureExits: ['他の細胞による取り込み（MCT1 など）', '乳酸シャトル', 'コリ回路（肝臓での糖新生）'] },
     // 0.4：細胞のすぐ外の乳酸。新しい細胞にしても残る（環境は細胞と別のもの）
+    // v0.2.0：細胞の外のグルコース（一定のリザーバー。量を追跡しない）
+    glcOut: { name: 'グルコース（細胞外）',        abbr: 'Glc(外)', pool: 'buffered', compartment: 'ext' },
     lacOut: { name: '乳酸（細胞外）',              abbr: 'Lac(外)', pool: 'free', initial: 0,   carbon: 3, group: 'lacOut', compartment: 'ext', environment: true },
     pi:    { name: '無機リン酸',                   abbr: 'Pᵢ',      pool: 'buffered' },
     h2o:   { name: '水',                           abbr: 'H₂O',     pool: 'buffered' },
@@ -109,9 +120,13 @@
   MB.REACTIONS = [
     // 細胞外からの入力。将来「食事 → 消化 → 吸収 → 血糖 → GLUT」に置き換えられるよう、
     // 供給はこの1反応に閉じ込めてある（kind: 'supply', source: 'external'）。
-    { id: 'glut', name: 'グルコース取り込み', computed: true, kind: 'supply', source: 'external',
-      stoich: { glc: +1 }, kinetics: { type: 'zero' }, vmaxBase: 0,
-      simplifications: ['S6'] },
+    // v0.2.0：定速（0次）から、濃度差に従う可逆・飽和型の輸送に変更（MB.GLUT）。vmax() の値は「最大輸送能力」Jmax。
+    //  可逆の飽和型の式で、Ks なし・Kp（グルコース）＝ Km ＋ G外・K ＝ G外 とすると、上の式と一致する。
+    { id: 'glut', name: 'グルコース取り込み', computed: true, kind: 'supply', source: 'external', protein: 'glut',
+      stoich: { glcOut: -1, glc: +1 },
+      thermo: { reversible: true, keq: 'glut' },
+      kinetics: { type: 'rev', ks: {}, kp: { glc: MB.GLUT.km + MB.GLUT.glcOut } }, vmaxBase: 0,
+      simplifications: ['S6', 'S16'] },
 
     // ===== 解糖系 ミクロ10反応（計算の主体） =====
     { id: 'hk', step: 1, phase: 'prep', name: 'ヘキソキナーゼ', abbr: 'HK', computed: true,
@@ -129,7 +144,14 @@
       stoich: { f6p: -1, atp: -1, f16bp: +1, adp: +1, h: +1 },
       thermo: { reversible: false, dG0: -14.2 },
       kinetics: { type: 'mm', km: { f6p: 2, atp: 8 } }, vmaxBase: 0.9,
-      notImplemented: ['ATP による阻害', 'AMP・ADP による活性化', 'フルクトース2,6-ビスリン酸による活性化', 'クエン酸による阻害', 'H⁺ による阻害'] },
+      // v0.2.0：ATP によるアロステリック阻害と、ADP による阻害の解除。
+      //  係数 ＝ 1 / (1 ＋ ((ATP/Ki) / (1 ＋ ADP/Ka))^n)。ATP が多く ADP が少ない（エネルギーが足りている）ほど PFK-1 が遅くなる。
+      //  基質としての ATP（Km 8）とは別の、調節部位への結合。Ki・Ka・n はゲーム値（v0.2.0 で調整）：
+      //   始めの細胞（ATP 80・ADP 20）では ×0.93 とほとんど抑えず、ATP がほぼ満タン（ADP 0）では ×0.0016 まで抑える。
+      //   下限を十分小さくしないと、準備期の酵素を最大まで増やして細胞の仕事が弱いとき、抑えきれずに F1,6BP が溜まる（dev/tests/v020_tests.js V1）
+      regulation: [{ kind: 'atpInhibition', effector: 'atp', antagonist: 'adp', ki: 20, ka: 3, n: 4, real: true,
+        note: 'ATP による阻害（アロステリック）。ATP は基質でもあるが、多いと調節部位にも結合して PFK-1 を遅くする。ADP（実際の細胞では主に AMP）が増えると阻害が解ける。細胞が ATP を使う速さに合わせて、解糖系に入る量が決まる。Ki・Ka はゲーム値。' }],
+      notImplemented: ['AMP による活性化（このモデルに AMP はない。ADP で代表させている）', 'フルクトース2,6-ビスリン酸による活性化', 'クエン酸による阻害', 'H⁺ による阻害'] },
     { id: 'aldo', step: 4, phase: 'prep', name: 'アルドラーゼ', abbr: 'ALDO', computed: true,
       stoich: { f16bp: -1, dhap: +1, gap: +1 },
       thermo: { reversible: true, dG0: 23.8, keqDim: 'M' },
@@ -160,7 +182,11 @@
       stoich: { pep: -1, adp: -1, h: -1, pyr: +1, atp: +1 },
       thermo: { reversible: false, dG0: -31.4 },
       kinetics: { type: 'mm', km: { pep: 0.05, adp: 8 } }, vmaxBase: 4,
-      notImplemented: ['F1,6BP による活性化（フィードフォワード）', 'ATP・アラニンによる阻害', '肝臓型のリン酸化による不活性化'] },
+      // v0.2.0：F1,6BP によるフィードフォワード活性化。係数 ＝ 1 ＋ α × F1,6BP / (Ka ＋ F1,6BP)（最大 2 倍）。α・Ka はゲーム値。
+      //  このモデルでは PK は ADP 待ちで進んでいることが多く、活性化しても流れはほとんど変わらない（docs/ANALYSIS_F16BP_v0.1.2.md）。
+      regulation: [{ kind: 'activation', effector: 'f16bp', alpha: 1, ka: 20, real: true,
+        note: 'F1,6BP による活性化（フィードフォワード）。準備期の産物 F1,6BP が増えると、回収期の最後の PK が速くなる（最大 2 倍）。ただし ADP が足りないと、PK を速めても流れは増えない。α・Ka はゲーム値。' }],
+      notImplemented: ['ATP・アラニンによる阻害', '肝臓型のリン酸化による不活性化'] },
 
     /* ===== 0.3 乳酸デヒドロゲナーゼ（LDH） =====
      *  正式な式：Pyruvate + NADH + H⁺ ⇄ Lactate + NAD⁺
@@ -221,7 +247,7 @@
    * ------------------------------------------------------------------- */
   const PREP = ['hk', 'pgi', 'pfk', 'aldo', 'tpi'], PAY = ['gapdh', 'pgk', 'pgam', 'eno', 'pk'];
   MB.UPGRADES = [
-    { id: 'glut', name: 'グルコース輸送体の発現', desc: 'グルコースを自動で取り込む。Lv ごとに +0.4 u/秒。',
+    { id: 'glut', name: 'グルコース輸送体の発現', desc: 'グルコースを細胞の外から自動で取り込む。最大輸送能力（細胞の中が空のときの速さ）が Lv ごとに +0.4 u/秒。細胞の中のグルコースが増えると、実際に入る速さは下がる。',
       costBase: 8, costGrowth: 1.45, maxLevel: 30,
       effect: { type: 'vmax', reactions: ['glut'], perLevel: 0.4, mode: 'add' } },
     { id: 'prep', name: '準備期の酵素の発現', desc: '準備期の5酵素の最大速度 +50%（Lv あたり）。',
@@ -230,9 +256,11 @@
     { id: 'pay', name: '回収期の酵素の発現', desc: '回収期の5酵素の最大速度 +50%（Lv あたり）。',
       costBase: 15, costGrowth: 1.4, maxLevel: 25,
       effect: { type: 'vmax', reactions: PAY, perLevel: 0.5, mode: 'mul' } },
-    { id: 'work', name: '細胞活動の活性化', desc: 'ATP 消費速度 +40%（Lv あたり）。',
+    // v0.2.0：+40% → +80%。PFK-1 の調節で解糖系の流れが ATP の消費に合うようになり、研究ポイント（ピルビン酸）の入り方が
+    //  ATP の消費の速さで決まるようになったため（ゲーム経済の調整。dev/tools/economy.js で MCT まで約50分を確認）
+    { id: 'work', name: '細胞活動の活性化', desc: 'ATP 消費速度 +80%（Lv あたり）。',
       costBase: 12, costGrowth: 1.45, maxLevel: 25,
-      effect: { type: 'vmax', reactions: ['atpase'], perLevel: 0.40, mode: 'mul' } },
+      effect: { type: 'vmax', reactions: ['atpase'], perLevel: 0.80, mode: 'mul' } },
     { id: 'nadsalv', name: 'NAD⁺ の追加合成（抽象化）', desc: '新たな NAD⁺ 分子を 100 u 加える。',
       // 価格は「現在の細胞での購入回数」で上がり、新しい細胞で初期価格に戻る（初期のプレステージの流れ）。
       // levels.nadsalv は累計の購入回数（統計）として保持する。

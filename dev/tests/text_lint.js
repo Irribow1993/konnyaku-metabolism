@@ -80,7 +80,8 @@ ok(MB.MICRO_IDS.every(id => MB.ENZYME_TEXT[id]), '10酵素すべてに説明文�
 ok(/state を書き換えない|state に触れない/.test(ui), '表示の切り替えが state を変えないことをコードに明記');
 
 ok(/買うたびに上がる/.test(G.cellloop.body) && /最初の状態に戻る/.test(G.cellloop.body) && /買うたびに上がり/.test(MB.UPGRADE_TEXT.nadsalv.line), '0.2 審査 §2：NAD⁺ 補充の価格が細胞ごとであることを説明');
-ok(/PFK-1 の調節を省略したこのモデルでの挙動/.test(ui), '0.2 審査 Q2：ATP 満タン時の挙動は PFK-1 の調節を省略したモデル上の挙動と明示');
+// v0.2.0：PFK-1 の調節を実装したため、0.2 審査 Q2 の「調節を省略したこのモデルでの挙動」という断りは不要になった。代わりに調節の説明があることを確かめる
+ok(!/PFK-1 の調節を省略/.test(ui) && /PFK-1 が解糖系の流れを絞っています/.test(ui) && /ATP による PFK-1 の抑制/.test(JSON.stringify(MB.GLOSSARY)), '0.2 審査 Q2 → v0.2.0：ATP 満タン時の説明は「PFK-1 の調節を省略」ではなく、実装した調節（PFK-1 が流れを絞る）で説明する');
 ok(/ピルビン酸の生成量/.test(G.rp.body), '研究ポイントの出どころ（ピルビン酸の生成量）を用語カードで説明');
 
 ok(/解析順序はゲーム上の表現です。実際の酵素の発見史、反応速度、律速性を表すものではありません。/.test(G.analysis.body), '0.2.2 審査 §2：解析順序に科学的意味がないことを明記');
@@ -136,17 +137,17 @@ console.log('[2d] Prototype 0.4（MCT・細胞の外）');
   ok(/嫌気的条件/.test(G.anaerobic.title + G.anaerobic.body) && MB.ENVIRONMENT.id === 'anaerobic' && !MB.ENVIRONMENT.mitochondria, '§8：嫌気的条件は変更しない');
 }
 
-console.log('[2e] v0.1.0 公開版（v0.1.1 で版を更新）');
+console.log('[2e] v0.1.0 公開版（v0.2.0 で版を更新）');
 {
   const pub = path.join(__dirname, '..', '..', 'public');
   const shownTexts = texts.filter(([w]) => !/^REACTIONS/.test(w) && w !== 'ui.js' && w !== 'index.html').map(t => t[1]).join('\n');
   const htmlBody = html.replace(/<!--[\s\S]*?-->/g, '');
   ok(!/Prototype|プロトタイプ/.test(shownTexts) && !/Prototype/.test(htmlBody), '画面に出る文言に「Prototype」が残っていない（開発中の版の呼び名）');
-  ok(/id="ver">v0\.1\.1</.test(html) && /id="about-ver">v0\.1\.1</.test(html) && /const VERSION = 'v0\.1\.1'/.test(ui) && /<title>METABOLISM — 代謝のインクリメンタルゲーム<\/title>/.test(html), 'タイトルとバージョン v0.1.1');
+  ok(/id="ver">v0\.2\.0</.test(html) && /id="about-ver">v0\.2\.0</.test(html) && /const VERSION = 'v0\.2\.0'/.test(ui) && /<title>METABOLISM — 代謝のインクリメンタルゲーム<\/title>/.test(html), 'タイトルとバージョン v0.2.0');
   ok(G.howto && G.simplify && G.saveinfo && /data-term="howto"/.test(html) && /btn-help/.test(html) && /openTerm\('howto'\)/.test(ui), '遊び方・このゲームの単純化・保存についての説明があり、「?」ボタンと詳細タブから開ける');
   ok(/量の単位 u はゲーム独自の単位/.test(G.simplify.body) && /嫌気的条件/.test(G.simplify.body) && /解析・同定/.test(G.simplify.body) && /ゲーム上の仕組み/.test(G.simplify.body), '単純化の注記：単位・嫌気的条件・解析と同定・ゲーム上の仕組み');
   ok(/if \(DEBUG\) window\.__METABOLISM_DEBUG__/.test(ui) && !/^\s*window\.__METABOLISM_DEBUG__/m.test(ui) && /if \(DEBUG\) \{ \$\('dbg-line'\)/.test(ui), '開発者向けの窓口（state の公開）と計算の健全性の表示は ?debug のときだけ');
-  const all = ['index.html', 'css/style.css', 'js/data.js', 'js/glossary.js', 'js/sim.js', 'js/aggregate.js', 'js/ui.js'].map(f => fs.readFileSync(path.join(pub, f), 'utf8')).join('\n');
+  const all = ['index.html', 'css/style.css', 'js/data.js', 'js/glossary.js', 'js/sim.js', 'js/savecode.js', 'js/aggregate.js', 'js/ui.js'].map(f => fs.readFileSync(path.join(pub, f), 'utf8')).join('\n');
   const allNoCredits = all.replace(/<dl class="credits"[\s\S]*?<\/dl>/, '').replace(/\/\*[\s\S]*?\*\//g, '');
   ok(!/https?:\/\/(?!www\.w3\.org\/2000\/svg)/.test(allNoCredits) && !/fetch\(|XMLHttpRequest|WebSocket|sendBeacon|EventSource|import\(|document\.cookie/.test(all), '外部への通信・外部の URL・Cookie を使わない（SVG の名前空間 URI と、作者・ライセンス欄のリンク・コメントを除く）');
   const links = [...html.matchAll(/<a [^>]*href="([^"]+)"[^>]*>/g)];
@@ -157,7 +158,7 @@ console.log('[2e] v0.1.0 公開版（v0.1.1 で版を更新）');
   ok(!/\beval\(|new Function\(/.test(all) && !/<script>(?!\s*<\/script>)/.test(html) && !/ on[a-z]+="/.test(html), 'eval・インラインのスクリプト・インラインのイベント属性がない（CSP の script-src \'self\' で動く）');
   const hdr = fs.readFileSync(path.join(pub, '_headers'), 'utf8');
   ok(/Content-Security-Policy: default-src 'none'; script-src 'self'/.test(hdr) && /connect-src 'none'/.test(hdr) && /frame-ancestors 'none'/.test(hdr), 'Cloudflare Pages の _headers に CSP（自サイトのみ・通信なし・埋め込み禁止）');
-  ok((ui.match(/localStorage\.(getItem|setItem|removeItem)\('?([A-Z_]+)/g) || []).every(x => /SAVE_KEY|VIEW_KEY|INTRO_KEY/.test(x)), 'localStorage に保存するのは、セーブ・表示の切り替え・初回の案内の3つだけ');
+  ok((ui.match(/localStorage\.(getItem|setItem|removeItem)\('?([A-Z_]+)/g) || []).every(x => /SAVE_KEY|VIEW_KEY|INTRO_KEY|BACKUP_KEY/.test(x)), 'localStorage に保存するのは、セーブ・表示の切り替え・初回の案内・読み込む前のセーブ（v0.1.2）の4つだけ');
 }
 
 console.log('[2f] v0.1.1：フォント');
@@ -167,6 +168,23 @@ console.log('[2f] v0.1.1：フォント');
   ok(/font-variant-numeric: tabular-nums/.test(last) && ['#flow .lac-enz', '#flow .ex-l', '.env', '.ev-en', '.rg-k', '#flow .s-rate', '.upg button'].every(sel => last.includes(sel)) && /font-family: var\(--sans\)/.test(last),
     '英字のラベル（LDH・MCT・EXTRACELLULAR・ANAEROBIC など）と日本語まじりの表示は本文のフォント。数字は等幅の数字（tabular-nums）');
   ok(/x: 286, y: 412, class: 'lac-enz mct-l'/.test(ui) && /#flow \.lac-enz\.mct-l \{ text-anchor: start; \}/.test(css), '全体図の「MCT」の文字を左寄せにして、矢印の線の右に置いた（中央寄せで線に重なっていた）');
+}
+
+
+console.log('[2g] v0.1.2：セーブの書き出し・読み込み、第1章 完');
+{
+  const pub = path.join(__dirname, '..', '..', 'public');
+  const sc = fs.readFileSync(path.join(pub, 'js/savecode.js'), 'utf8');
+  ok(/<script src="js\/sim\.js"><\/script>\n<script src="js\/savecode\.js"><\/script>/.test(html), 'savecode.js は sim.js の直後に読み込む（自サイトのファイル。CSP はそのまま）');
+  ok(!/fetch\(|XMLHttpRequest|WebSocket|sendBeacon|innerHTML|eval\(/.test(sc), 'savecode.js は通信も innerHTML も使わない');
+  ok(/BACKUP_KEY = 'metabolism\.save\.backup'/.test(ui) && /if \(replacing\) return;/.test(ui), '読み込む前のセーブを1件残す。差し替えのあとは古い state で保存しない');
+  ok(/lastSaved = Date\.now\(\);\s+\/\/ 書き出してからの時間で留守中の進行が起きないようにする/.test(ui), '読み込んだセーブでは留守中の進行を起こさない');
+  const last = MB.GOALS[MB.GOALS.length - 1];
+  const card = html.slice(html.indexOf('id="event-ch1"'), html.indexOf('<script src="js/data.js">'));
+  ok(last.final && /^第1章 完/.test(last.text) && /CHAPTER 1 COMPLETE/.test(card) && /第1章 解糖系と発酵 完/.test(card), '第1章 完の画面と、最後の目標（次の章の予告）');
+  const teaser = [last.hint, card, (ui.match(/const CH1_NOTE = '([^']+)'/) || [])[1]].join('\n');
+  ok(/酸素があっても(、)?乳酸はつくられ得る/.test(teaser) && !/酸素があれば乳酸は|酸素がないと乳酸|酸素がないときだけ/.test(teaser), '次の章の予告は「酸素があっても乳酸はつくられ得る」と矛盾しない');
+  ok(/詳細タブの「書き出す」/.test(G.saveinfo.body) && /読み込む前に戻す/.test(G.saveinfo.body) && /自動では共有されません/.test(G.saveinfo.body), '「保存について」に書き出し・読み込みの説明');
 }
 
 console.log('[3] 参照の整合性');

@@ -10,7 +10,8 @@
   const SAVE_KEY = 'metabolism.save.v1';      // 保存場所の名前（0.1 と共通。中身の版は saveVersion で管理）
   const VIEW_KEY = 'metabolism.view';
   const INTRO_KEY = 'metabolism.intro';       // v0.1.0：初回の「遊び方」を出したかどうか
-  const VERSION = 'v0.1.1';
+  const BACKUP_KEY = 'metabolism.save.backup'; // v0.1.2：読み込みで上書きする前のセーブ（1件だけ）
+  const VERSION = 'v0.2.0';
   // 開発者向けの機能（画面テスト用の state の窓口、計算の健全性の表示）は ?debug のときだけ有効にする
   const DEBUG = /(^|[?&])debug(=|&|$)/.test(location.search.slice(1));
   const TICK_MS = 100;
@@ -55,9 +56,15 @@
     } catch (e) { /* 保存できない環境ではメモリ上のみ */ }
     return S.createState();
   }
+  let replacing = false;     // v0.1.2：読み込みで保存を差し替えたあと、再読み込みまでの間は古い state で上書きしない
+  let saveWarned = false;    // v0.1.2：自動保存の失敗（保存領域がいっぱいなど）は、1回だけ知らせる
   function save(silent) {
-    try { localStorage.setItem(SAVE_KEY, S.serialize(state)); if (!silent) toast('保存しました'); }
-    catch (e) { if (!silent) toast('この環境では保存できません'); }
+    if (replacing) return;
+    try { localStorage.setItem(SAVE_KEY, S.serialize(state)); if (!silent) toast('保存しました'); saveWarned = false; }
+    catch (e) {
+      if (!silent) toast('この環境では保存できません');
+      else if (!saveWarned) { saveWarned = true; toast('自動保存できませんでした（保存領域がいっぱいか、保存できない環境です）。詳細タブの「書き出す」で控えを取れます'); }
+    }
   }
   let toastTimer = null;
   /* 通知：文の長さに応じて表示時間を延ばす（1文字あたり約0.1秒、2.5〜12秒）。タップで閉じる。
@@ -93,6 +100,21 @@
     if (z) { e.stopPropagation(); e.preventDefault(); openEnzyme(z.getAttribute('data-enzyme')); }
   }, true);
 
+  /* v0.2.0：調節の式（詳細タブ）と、いまの係数（酵素カード） */
+  function regFormula(g) {
+    const E = SP[g.effector].abbr;
+    if (g.kind === 'inhibition') return ` × ${g.ki}/(${g.ki}+${E})［実在の調節］`;
+    if (g.kind === 'atpInhibition') return ` × 1/(1+((${E}/${g.ki})/(1+${SP[g.antagonist].abbr}/${g.ka}))^${g.n})［実在の調節：ATP による阻害・ADP による解除］`;
+    if (g.kind === 'activation') return ` × (1+${g.alpha}×${E}/(${g.ka}+${E}))［実在の調節：活性化］`;
+    return '';
+  }
+  function regulationNow(id) {
+    return S.regulationFactors(id, state).map(f => f.kind === 'activation'
+      ? `いまの ${SP[f.effector].abbr} による活性化：×${f.factor.toFixed(2)}（最大 ×${(1 + R(id).regulation.find(g => g.effector === f.effector).alpha).toFixed(0)}）`
+      : `いまの ${SP[f.effector].abbr} による抑制：×${f.factor.toFixed(2)}（1 なら抑えられていない）`).join('\n');
+  }
+  function pfkFactor() { const f = S.regulationFactors('pfk', state)[0]; return f ? f.factor : 1; }
+
   function equation(r) {
     const L = [], Rt = [];
     for (const [s, c] of Object.entries(r.stoich)) {
@@ -117,7 +139,7 @@
       rows.push(['NAD⁺ の収支', 'LDH は NADH 1 個を NAD⁺ 1 個に戻すだけで、NAD⁺ と NADH の合計は変わらない（新しくつくるのではなく再生）。']);
     }
     if (K != null) rows.push(['ゲーム内の平衡定数 K_game', `${K.toPrecision(3)}` + (r.thermo.keqDim === 'M' ? ' u（1 u = 0.1 mM で換算）' : r.thermo.keqDim === 'perM_pi' ? '（無機リン酸 1 mM を繰り込み）' : '') + `\n現在の Q / K_game = ${fmt2(S.massActionRatio(id, state) / K)}（1 に近いほど平衡に近い）`]);
-    if (r.regulation && r.regulation.length) rows.push(['調節（実装済み・実在）', r.regulation.map(g => g.note).join('\n')]);
+    if (r.regulation && r.regulation.length) rows.push(['調節（実装済み・実在）', r.regulation.map(g => g.note).join('\n') + '\n' + regulationNow(id)]);
     if (r.notImplemented && r.notImplemented.length) rows.push(['実在するが、この版では省略している調節', r.notImplemented.join('、')]);
     rows.push(['研究', `Lv ${lv}（最大速度 ${fmt2(S.vmax(state, r))} u/秒）`]);
     openSheet(`${r.step ? r.step + '. ' : ''}${r.name}（${r.abbr}）`, '<dl>' + rows.map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join('') + '</dl>');
@@ -446,10 +468,12 @@
       return { lv: 'caution', stall: 'slow', text: `NADH が溜まり、回収期が遅くなっています（NAD⁺ の割合 ${Math.round(nadFrac * 100)}%）ⓘ`, term: 'nadh' };
     if (a.atp < 10 && m.rates.prep > 0)
       return { lv: 'caution', text: 'ATP が減っています。細胞の仕事に使いすぎかもしれません' };
-    if (m.prep.kind === 'regulated' && m.prep.factor < 0.5)
+    // v0.2.0：PFK-1 が ATP で抑えられているのは、ATP が足りているときのふつうの状態（その結果 G6P が増え、HK も抑えられる）
+    const pfkReg = m.prep.kind === 'regulated' && m.prep.at === 'pfk' && m.prep.factor < 0.5;
+    if (m.prep.kind === 'regulated' && m.prep.at === 'hk' && m.prep.factor < 0.5)
       return { lv: 'caution', text: 'G6P が溜まり、ヘキソキナーゼが抑えられています（実在の調節）ⓘ', term: 'hkreg' };
-    if (a.adp < 3 && a.atp > 90 && payMaterial(m) > 20)
-      return { lv: 'caution', text: 'ATP がほぼ満タンで、回収期が ADP 不足で進みにくく、中間体が溜まっています（PFK-1 の調節を省略したこのモデルでの挙動）ⓘ', term: 'reg' };
+    if (a.adp < 1 && a.atp > 90 && payMaterial(m) > 200)
+      return { lv: 'caution', text: 'ATP がほぼ満タンで、回収期が ADP 不足で進みにくく、中間体が溜まっています ⓘ', term: 'pfkreg' };
     if (a.glc < 1 && (state.levels.glut || 0) === 0)
       return { lv: 'idle', text: state.totals.glcSupplied ? 'グルコースが空です。下のボタンで追加しましょう' : '下のボタンでグルコースを入れてみましょう' };
     const regen = S.isIdentified(state, 'ldh') && !(state.switches && state.switches.ldhOff) && (state.flux.ldh || 0) > 0.01;
@@ -458,6 +482,7 @@
     if (regen && exporting) return { lv: 'good', text: 'NAD⁺ を再生し、乳酸を細胞の外へ運びながら回っています ⓘ', term: 'lacbal' };
     if (regen && !S.isIdentified(state, 'mct') && a.lac >= 1000) return { lv: 'good', text: 'NAD⁺ を再生しながら回っています。乳酸は細胞の中にたまり続けています ⓘ', term: 'lac' };
     if (regen) return { lv: 'good', text: 'NAD⁺ を再生しながら、順調に回っています ⓘ', term: 'nadcycle' };
+    if (pfkReg) return { lv: 'good', text: 'ATP が足りているので、PFK-1 が解糖系の流れを絞っています（実在の調節）ⓘ', term: 'pfkreg' };
     return { lv: 'good', text: '順調に回っています' };
   }
   /* 停止時の説明：補充で必ず再開できるとは断定しない。ATP 枯渇は「このゲームのモデルでの挙動」として説明する */
@@ -513,6 +538,7 @@
   function renderGoal() {
     const g = MB.GOALS.find(g => !g.done(state)) || MB.GOALS[MB.GOALS.length - 1];
     $('goal-text').textContent = g.text;
+    $('goal-bar').parentNode.hidden = !!g.final;           // v0.1.2：第1章 完（次の章の予告）には進み具合のバーを出さない
     $('goal-hint').textContent = typeof g.hint === 'function' ? g.hint(state) : (g.hint || '');
     let p = 0;
     if (g.upgrade) p = S.isAvailable(state, g.upgrade) ? state.rp / S.upgradeCost(state, g.upgrade) : 0;
@@ -626,7 +652,10 @@
     const ef = u.effect, a = ef.offset || 0;
     const mul = l => 1 + ef.perLevel * Math.max(0, l - a);
     const arrow = (x, y, unit) => `${x}<span class="arrow">→</span>${y}${unit}`;
-    if (ef.mode === 'add') return 'グルコースの自動取り込み ' + arrow(fmt2(ef.perLevel * lv), fmt2(ef.perLevel * (lv + 1)), ' 個/秒');
+    // v0.2.0：研究で上がるのは「最大輸送能力」（細胞の中が空のときの速さ）。実際に入る速さは細胞の中のグルコースで変わるので、並べて出す
+    if (u.id === 'glut') return '最大輸送能力 ' + arrow(fmt2(ef.perLevel * lv), fmt2(ef.perLevel * (lv + 1)), ' 個/秒') +
+      (lv ? `<small class="now">いま入っている速さ ${fmt2(state.flux.glut || 0)} 個/秒</small>` : '');
+    if (ef.mode === 'add') return arrow(fmt2(ef.perLevel * lv), fmt2(ef.perLevel * (lv + 1)), ' /秒');
     const m = arrow('×' + mul(lv).toFixed(1), '×' + mul(lv + 1).toFixed(1), '');
     if (u.id === 'prep') return `準備期の5つの酵素の速さ ${m}`;
     if (u.id === 'pay') return `回収期の5つの酵素の速さ ${m}`;
@@ -653,6 +682,7 @@
         const why = a.glc < 1 ? 'グルコースの供給が追いついていないようです'
           : tN && a.nad / tN < 0.15 ? 'NADH が溜まって回収期が遅くなっているようです'
           : a.atp < 10 ? 'ATP が足りていないようです'
+          : pfkFactor() < 0.5 ? 'ATP が足りているため PFK-1 が流れを絞っています（流れを増やすには、ATP を使う「細胞をもっと働かせる」が効きます）'
           : 'ほかの場所がボトルネックになっているようです';
         msg = `${head}）。速さはほとんど変わりません。${why}`;
       }
@@ -691,7 +721,9 @@
       lines.push(`■ ${r.step ? r.step + '. ' : ''}${r.name}` + (r.gate ? '（同定するまで反応しない）' : ''), `  ${equation(r)}` + (r.id === 'ldh' ? '（計算では H⁺ を一定とみなす）' : ''));
       if (r.thermo && r.thermo.keq === 'mct') lines.push(`  輸送の平衡 K = 10^(pH外 − pH内) = ${S.kGame(id).toPrecision(3)}（[乳酸]外/[乳酸]内。pH 一定。電気的に中性）`);
       if (r.thermo && r.thermo.dG0 != null) lines.push(`  ΔG°′ ${r.thermo.dG0} kJ/mol` + (S.kGame(id) != null ? ` → K_game ${S.kGame(id).toPrecision(3)}${r.thermo.keqDim === 'M' ? ' u' : ''}` : '（不可逆として扱う）'));
-      if (k.type === 'mm') lines.push(`  速度式: Vmax${Object.entries(k.km).map(([s, v]) => ` × ${SP[s].abbr}/(${v}+${SP[s].abbr})`).join('')}` + (r.regulation || []).map(g => ` × ${g.ki}/(${g.ki}+${SP[g.effector].abbr})［実在の調節］`).join(''));
+      if (k.type === 'mm') lines.push(`  速度式: Vmax${Object.entries(k.km).map(([s, v]) => ` × ${SP[s].abbr}/(${v}+${SP[s].abbr})`).join('')}` + (r.regulation || []).map(regFormula).join(''));
+      else if (r.id === 'glut') lines.push(`  速度式: 対称な輸送体 J = Vmax×(G外−G内)/(Km+G外+G内)。G外 ${MB.GLUT.glcOut} u で一定、Km ${MB.GLUT.km} u`,
+        `  研究で上がる「最大輸送能力」＝ G内 0 のときの J。平衡（正味 0）は G内 ＝ G外。G内 ＞ G外 なら外へ出る`);
       else if (k.type === 'rev') lines.push(`  速度式: 可逆の飽和型（Q = K_game で正味 0）Ks ${JSON.stringify(k.ks)} Kp ${JSON.stringify(k.kp)}`);
       else lines.push('  速度式: 定速供給');
       lines.push('');
@@ -718,7 +750,9 @@
       chk('ATP + ADP', cons.adenylate, exp.adenylate) + '<br>' +
       chk('NAD⁺ + NADH', cons.nicotinamide, exp.nicotinamide) + '<br>' +
       `炭素 = ${fmt2(S.carbon(state))}（炭素をもつ全${S.FREE.filter(id => SP[id].carbon).length}物質の炭素数 × 量の合計）` + '<br>' +
-      (state.totals.extent.lac_clear ? `細胞の周りから運び去られた乳酸の炭素 = ${fmt2(S.carbonOut(state))}（系の外へ出た分）<br>` : '') +
+      (state.totals.extent.lac_clear ? `細胞の周りから運び去られた乳酸の炭素 = ${fmt2(3 * state.totals.extent.lac_clear)}（系の外へ出た分）<br>` : '') +
+      (state.totals.glcReturned ? `GLUT で細胞の外へ戻ったグルコースの炭素 = ${fmt2(6 * state.totals.glcReturned)}（系の外へ出た分）<br>` : '') +
+      ((state.levels.glut || 0) ? `GLUT：最大輸送能力 ${fmt2(S.vmax(state, R('glut')))} /秒、いま入っている速さ ${signed(state.flux.glut || 0)} /秒（細胞の中のグルコース ${fmt2(a.glc)}、外 ${MB.GLUT.glcOut} で一定）<br>` : '') +
       (state.extAdded.nad ? `NAD⁺ の外部からの補充：この細胞で ${fmt2(state.extAdded.nad)}（期待値に含む）` : 'この細胞では NAD⁺ の外部からの補充なし') + '<br>' +
       '';
     if (DEBUG) { $('dbg-line').hidden = false; $('dbg-line').textContent = `計算の健全性：平衡の行き過ぎ ${state.diag.eqViolations} 件／刻みの半分化 ${state.diag.halvings} 回／解法の失敗 ${state.diag.newtonFail} 件`; }
@@ -746,7 +780,7 @@
       renderGauges();
     } else if (tab === 'research') renderUpgrades();
     else if (tab === 'log') renderLog();
-    else renderDetail();
+    else { renderDetail(); syncIo(); }
   }
 
   /* ---------- 0.3：LDH の同定（いちばん大きな出来事） ----------
@@ -779,6 +813,117 @@
     setTimeout(() => { try { p.scrollIntoView({ block: 'center', behavior: 'smooth' }); } catch (e) {} }, 50);
   });
 
+  /* ---------- v0.1.2：第1章 完 ---------- */
+  // 条件は LACTATE BALANCE の達成（記録 lac_balance）。出したことは記録 chapter1_clear に残す（milestones はそのまま保存される）。
+  // 既に達成しているセーブでも、読み込んだあと1回だけ出る。計算（Sim.step）には関わらない。
+  const CH1_NOTE = '第1章 解糖系と発酵 完。NADH を NAD⁺ に戻す方法は、乳酸の生成だけではない。細胞はミトコンドリアで、酸素を使って NADH を再酸化することもできる（酸素があっても乳酸はつくられ得る）。酸素を使う経路は、今後のアップデートで解放予定。';
+  function ch1Stats() {
+    const at = state.milestones.lac_balance;
+    const rows = [
+      ['ゲーム内の経過時間', fmtTime(state.t) + '（留守のあいだの進行を含む）'],
+      ['つり合いに到達', at != null ? fmtTime(at) : '—'],
+      ['つくったピルビン酸', fmt(state.totals.pyrProduced) + ' u'],
+      ['使った細胞', ((state.totals.cultures || 0) + 1) + ' 個'],
+      ['NAD⁺ の補充', (state.levels.nadsalv || 0) + ' 回'] ];
+    const dl = $('ch1-stats'); dl.textContent = '';
+    for (const [k, v] of rows) { const dt = document.createElement('dt'), dd = document.createElement('dd'); dt.textContent = k; dd.textContent = v; dl.append(dt, dd); }
+  }
+  function showCh1() { closeSheet(); ch1Stats(); $('event-ch1').hidden = false; }
+  function checkChapter() {
+    const ms = state.milestones;
+    if (ms.lac_balance == null || ms.chapter1_clear != null) return;
+    if (!$('event').hidden || !$('event-mct').hidden) return;          // ほかの出来事の画面を閉じてから
+    ms.chapter1_clear = state.t;
+    S.addNote(state, CH1_NOTE);
+    save(true); showCh1();
+  }
+  $('ch1-go').addEventListener('click', () => { $('event-ch1').hidden = true; });
+  $('ch1-export').addEventListener('click', () => { $('event-ch1').hidden = true; showTab('detail'); showExport(); });
+  $('btn-ch1-again').addEventListener('click', showCh1);
+
+  /* ---------- v0.1.2：セーブの書き出し・読み込み ---------- */
+  // 文字列の形と中身の確かめは MB.SaveCode と Sim.deserialize。画面に出す文はすべて textContent（HTML にしない）。
+  const SC = MB.SaveCode;
+  function ioMsg(text, err) { const m = $('io-msg'); m.hidden = !text; m.textContent = text || ''; m.classList.toggle('err', !!err); }
+  function hasBackup() { try { return !!localStorage.getItem(BACKUP_KEY); } catch (e) { return false; } }
+  function syncIo() { $('btn-restore').hidden = !hasBackup(); $('ch1-again-row').hidden = state.milestones.chapter1_clear == null; }
+  function showExport() {
+    $('io-import').hidden = true;
+    const ta = $('io-export-text');
+    ta.value = SC.encode(state);
+    $('io-export').hidden = false;
+    ioMsg('');
+    setTimeout(() => { try { ta.scrollIntoView({ block: 'center', behavior: 'smooth' }); } catch (e) {} }, 50);
+  }
+  function describe(st) {
+    const x = SC.summary(st);
+    return `ゲーム内の経過時間 ${fmtTime(x.t)}・同定した酵素と輸送体 ${x.identified}/${x.of}・研究ポイント ${fmt(x.rp)}`;
+  }
+  // 保存を差し替えて読み直す（画面の状態をすべて作り直すため）。
+  //  保存領域がいっぱいでも、いまの進み具合を失わない順にする：
+  //   1. いまの進み具合をバックアップに書く（失敗したら何も変えずに中止）
+  //   2. 新しい内容をセーブに書く（失敗したらバックアップを元に戻して中止。セーブは書き込みに失敗すると元のまま）
+  //   3. 書いた内容を読み返して確かめてから、読み直す。差し替えのあとは古い state で保存しない
+  function writeChecked(key, value) {
+    localStorage.setItem(key, value);
+    if (localStorage.getItem(key) !== value) throw new Error('verify');
+  }
+  /* 読み込み・戻す：①いまの進み具合を控えに ②新しいセーブを書く ③どちらも書いたあと読み直して確かめる。
+   *  どこで失敗しても、書く前のセーブと控えを元に戻す（v0.2.0 公開前確認1：既存の控えも失わない）。
+   *  元に戻すのにも失敗したときは、そのことを伝え、「書き出す」で控えを取るよう案内する（いまの進み具合は画面の中に残っている） */
+  function replaceSave(next, what) {
+    let prevSave = null, prevBackup = null;
+    try { prevSave = localStorage.getItem(SAVE_KEY); prevBackup = localStorage.getItem(BACKUP_KEY); }
+    catch (e) { ioMsg(`この環境では保存できないため、${what}ませんでした。いまの進み具合はそのままです。`, true); return; }
+    const cur = S.serialize(state);
+    const rollback = () => {                       // 書く前の2つの値に戻す。戻せたかを返す
+      let ok = true;
+      for (const [k, v] of [[BACKUP_KEY, prevBackup], [SAVE_KEY, prevSave == null ? cur : prevSave]]) {
+        try { if (localStorage.getItem(k) === v) continue; if (v == null) localStorage.removeItem(k); else localStorage.setItem(k, v); if (localStorage.getItem(k) !== v) ok = false; }
+        catch (e) { ok = false; }
+      }
+      return ok;
+    };
+    const fail = why => {
+      if (rollback()) ioMsg(`${why}、${what}ませんでした。いまの進み具合と「読み込む前に戻す」の控えは、そのままです。`, true);
+      else { replacing = false; ioMsg(`${why}、${what}ませんでした。保存の内容を元に戻すこともできませんでした。いまの進み具合は画面に残っているので、すぐに「書き出す」で控えを取ってください。`, true); }
+    };
+    try { writeChecked(BACKUP_KEY, cur); } catch (e) { fail('保存領域がいっぱいで、いまの進み具合の控えを残せないため'); return; }
+    try { writeChecked(SAVE_KEY, next); } catch (e) { fail('保存領域がいっぱいで'); return; }
+    replacing = true;
+    location.reload();
+  }
+  $('btn-export').addEventListener('click', showExport);
+  $('btn-copy').addEventListener('click', () => {
+    const ta = $('io-export-text');
+    const manual = () => { ta.focus(); ta.select(); ioMsg('自動でコピーできませんでした。選ばれている文字列を、長押しや Ctrl+C でコピーしてください。'); };
+    try {
+      if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(ta.value).then(() => ioMsg('コピーしました。移したい先の「読み込む」に貼り付けてください。'), manual);
+      else manual();
+    } catch (e) { manual(); }
+  });
+  $('btn-import').addEventListener('click', () => {
+    $('io-export').hidden = true; $('io-import').hidden = false; ioMsg('');
+    $('io-import-text').focus();
+  });
+  $('btn-import-go').addEventListener('click', () => {
+    const r = SC.decode($('io-import-text').value);
+    if (!r.ok) { ioMsg('読み込めませんでした：' + r.error, true); return; }
+    if (!confirm('いまの進み具合を、貼り付けた内容で置き換えますか？\n\nいま：' + describe(state) + '\n読み込む内容：' + describe(r.state) +
+      '\n\nいまの進み具合は「読み込む前に戻す」で1回だけ元に戻せます。')) return;
+    r.state.lastSaved = Date.now();                      // 書き出してからの時間で留守中の進行が起きないようにする
+    replaceSave(S.serialize(r.state), '読み込め');
+  });
+  $('btn-restore').addEventListener('click', () => {
+    let json = null;
+    try { json = localStorage.getItem(BACKUP_KEY); } catch (e) {}
+    const b = json && S.deserialize(json);
+    if (!b) { ioMsg('戻せる進み具合が見つかりませんでした。', true); return; }
+    if (!confirm('読み込む前の進み具合に戻しますか？\n\n戻す内容：' + describe(b) + '\n\nいまの進み具合は、代わりに「読み込む前に戻す」に入ります。')) return;
+    b.lastSaved = Date.now();
+    replaceSave(S.serialize(b), '戻せ');
+  });
+
   /* ---------- 操作 ---------- */
   const culture = () => { S.newCulture(state); save(true); render(0); toast('新しい細胞で再開しました（研究はそのまま。NAD⁺ 補充の価格も元に戻りました' + (S.isIdentified(state, 'mct') ? '。細胞の外の乳酸は残っています' : '') + '）'); };
   $('btn-culture').addEventListener('click', culture);
@@ -788,8 +933,8 @@
   });
   $('btn-save').addEventListener('click', () => save(false));
   $('btn-wipe').addEventListener('click', () => {
-    if (!confirm('研究も含めて、すべて最初からやり直しますか？')) return;
-    try { localStorage.removeItem(SAVE_KEY); } catch (e) {}
+    if (!confirm('研究も含めて、すべて最初からやり直しますか？' + (hasBackup() ? '\n\n「読み込む前に戻す」の控えも消えます。' : '') + '\n元に戻せません。')) return;
+    try { localStorage.removeItem(SAVE_KEY); localStorage.removeItem(BACKUP_KEY); } catch (e) {}   // v0.1.2：読み込む前のセーブも消す（元に戻せない）
     state = S.createState(); seenLog = 0; logKey = ''; showTab('cell'); toast('最初からになりました');
   });
 
@@ -808,6 +953,7 @@
         save(true);
       }
     }
+    checkChapter();
     render(dt);
     sinceSave += dt;
     if (sinceSave > 10) { save(true); sinceSave = 0; }

@@ -1,16 +1,16 @@
-# 公開チェックリスト（METABOLISM v0.1.1）
+# 公開チェックリスト（METABOLISM v0.2.0）
 
-公開用ビルド：**v0.1.1**。`public/` の各ファイルの SHA-256 は `docs/MANIFEST_v0.1.1.sha256` に記録してあります。
+公開用ビルド：**v0.2.0**。`public/` の各ファイルの SHA-256 は `docs/MANIFEST_v0.2.0.sha256` に記録してあります。
 公開前・公開後に `python3 dev/tools/verify_manifest.py` を実行し、「すべて一致」になることを確認してください（ファイルが意図せず変わっていないことの確認）。
 
-> この版では、新機能・ゲームバランスの変更は行いません。チェックで不具合が見つかった場合は、内容と影響を記録して判断します（下の「不具合の記録」）。
+> この版では、代謝の計算・ゲームバランスの変更は行いません（追加はセーブの書き出し・読み込みと第1章 完の画面）。チェックで不具合が見つかった場合は、内容と影響を記録して判断します（下の「不具合の記録」）。
 
 ---
 
 ## A. 公開前（開発者の手元）
 - [x] 作者名・連絡先・ライセンスを決め、README に記入し、`LICENSE`（GPL-3.0）を置いた（2026-10-17）
 - [ ] `python3 dev/tools/verify_manifest.py` → すべて一致
-- [ ] （任意）自動テスト：`node dev/tests/run_tests.js`・`node dev/tests/text_lint.js` → すべて成功
+- [ ] （任意）自動テスト：`node dev/tests/run_tests.js`・`node dev/tests/savecode_tests.js`・`node dev/tests/text_lint.js` → すべて成功
 - [ ] GitHub の「Keep my email addresses private」を有効にした（コミットに個人のメールアドレスを残さない）
 - [ ] リポジトリを **Public** で作成し、トップに README・LICENSE が表示される（GitHub が「GPL-3.0 license」と認識している）
 
@@ -29,14 +29,22 @@
 | 8. ブラウザ（アプリ）を閉じて開き直すと続きから | | | | | |
 | 9. 詳細タブ「新しい細胞で再開」で確認が出て、再開できる | | | | | |
 | 10. 横向きにしても操作できる（狭いのは既知の制約） | | | | | |
+| 11. 詳細タブ「書き出す」→「コピーする」で文字列がコピーされる（できないときは選んで手でコピーできる） | | | | | |
+| 12. 別の端末・ブラウザの「読み込む」に貼り付けて、同じ進み具合で再開できる | | | | | |
+| 13. 読み込んだあと「読み込む前に戻す」で元に戻る | | | | | |
+| 14. v0.1.2 で遊んでいたブラウザで開くと、続きから遊べる（研究・研究ポイントがそのまま） | | | | | |
+| 15. 研究タブのグルコース輸送体に「最大輸送能力」と「いま入っている速さ」が出る | | | | | |
 
 気づいたこと（端末名・OS の版・内容）：
 
 ## C. 公開直後（`https://<名前>.pages.dev`）
-- [ ] ページが開き、タイトル「METABOLISM — 代謝のインクリメンタルゲーム」、ヘッダに「v0.1.1」
+- [ ] ページが開き、タイトル「METABOLISM — 代謝のインクリメンタルゲーム」、ヘッダに「v0.2.0」
 - [ ] `https://<名前>.pages.dev/LICENSE.txt` で GPL-3.0 の全文が出る（トップ画面が出る場合は、古い版のファイルが登録されている）
 - [ ] 初回に「遊び方」が開く。再読み込みすると開かない
-- [ ] 開発者ツール →「ネットワーク」：読み込みが自サイトのファイルだけ（index.html・style.css・js 5つ・favicon.svg）
+- [ ] 開発者ツール →「ネットワーク」：読み込みが自サイトのファイルだけ（index.html・style.css・js 6つ・favicon.ico・icon-192.png）
+- [ ] `https://<名前>.pages.dev/og-image.jpg` が画像として開く。`index.html` の `og:url`・`og:image` の住所が、実際の公開URLと同じ
+- [ ] X・LINE・Discord などに公開URLを貼ると、タイトル・説明文・画像（METABOLISM のバナー）のプレビューが出る（X は投稿画面のプレビュー、Facebook は Sharing Debugger でも確かめられる）
+- [ ] iPhone の Safari で「ホーム画面に追加」すると、M のアイコンになる。ブラウザのタブにも M のアイコンが出る
 - [ ] 開発者ツール →「コンソール」：エラー（CSP 違反を含む）がない
 - [ ] `curl -I https://<名前>.pages.dev/` で `Content-Security-Policy`・`X-Content-Type-Options`・`X-Frame-Options`・`Referrer-Policy`・`Permissions-Policy` が付いている
 - [ ] `https://<名前>.pages.dev/_headers` を開くと、設定ファイルの中身ではなくゲームのトップ画面が出る（Cloudflare Pages は 404.html がないとき、存在しない住所にトップページを返す。設定ファイルは配信されない）

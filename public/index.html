@@ -7,7 +7,22 @@
 <meta name="description" content="細胞の解糖系を動かし、研究を重ねて代謝のしくみを一つずつ明らかにしていく、生化学がテーマのインクリメンタルゲーム。">
 <meta name="color-scheme" content="dark">
 <title>METABOLISM — 代謝のインクリメンタルゲーム</title>
-<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<link rel="canonical" href="https://konnyaku-metabolism.pages.dev/">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="METABOLISM">
+<meta property="og:title" content="METABOLISM — 代謝のインクリメンタルゲーム">
+<meta property="og:description" content="細胞の解糖系を動かし、研究を重ねて代謝のしくみを一つずつ明らかにしていく、生化学がテーマのインクリメンタルゲーム。">
+<meta property="og:url" content="https://konnyaku-metabolism.pages.dev/">
+<meta property="og:image" content="https://konnyaku-metabolism.pages.dev/og-image.jpg">
+<meta property="og:image:type" content="image/jpeg">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="METABOLISM のタイトルと、代謝の経路をかたどった線と点の図">
+<meta property="og:locale" content="ja_JP">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="icon" href="favicon.ico" sizes="48x48">
+<link rel="icon" href="icon-192.png" type="image/png" sizes="192x192">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
 <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
@@ -15,7 +30,7 @@
 <header class="top">
   <div class="bar">
     <span class="brand">METABOLISM</span>
-    <span class="proto" id="ver">v0.1.1</span>
+    <span class="proto" id="ver">v0.2.0</span>
     <button type="button" class="help" id="btn-help" aria-label="遊び方とこのゲームについて">?</button>
     <span class="sp"></span>
     <button class="rp-pill" id="rp-pill" type="button" data-tab="research">
@@ -140,7 +155,7 @@
       <button type="button" data-term="simplify">このゲームの単純化</button>
       <button type="button" data-term="saveinfo">保存について</button>
     </div>
-    <p class="fine about-ver">METABOLISM <span id="about-ver">v0.1.1</span> ― 生化学がテーマのインクリメンタルゲーム。数値と進め方はゲーム用に単純化しています。</p>
+    <p class="fine about-ver">METABOLISM <span id="about-ver">v0.2.0</span> ― 生化学がテーマのインクリメンタルゲーム。数値と進め方はゲーム用に単純化しています。</p>
     <dl class="credits" id="credits">
       <dt>作者</dt>
       <dd>こんにゃくお爺さん（<a href="https://note.com/irribow1993" target="_blank" rel="noopener noreferrer">note のプロフィール</a>）</dd>
@@ -180,6 +195,27 @@
       <button type="button" id="btn-wipe" class="danger">すべて最初から</button>
     </div>
     <p class="fine">経過時間 <span id="hud-t"></span> ／ 進み具合はこのブラウザの中だけに自動保存されます（外部には送信しません）。</p>
+    <h3>セーブの書き出し・読み込み</h3>
+    <p class="fine">別の端末やブラウザに進み具合を移すときに使います。「書き出す」で出てくる文字列をコピーし、移したい先の「読み込む」に貼り付けてください。文字列には進み具合だけが入っています（個人情報は入りません。どこにも送信しません）。</p>
+    <div class="data-actions">
+      <button type="button" id="btn-export">書き出す</button>
+      <button type="button" id="btn-import">読み込む</button>
+      <button type="button" id="btn-restore" hidden>読み込む前に戻す</button>
+    </div>
+    <div class="io" id="io-export" hidden>
+      <label for="io-export-text">書き出した文字列（すべて選んでコピーしてください）</label>
+      <textarea id="io-export-text" rows="4" readonly spellcheck="false"></textarea>
+      <button type="button" id="btn-copy">コピーする</button>
+    </div>
+    <div class="io" id="io-import" hidden>
+      <label for="io-import-text">書き出した文字列を貼り付けてください</label>
+      <textarea id="io-import-text" rows="4" spellcheck="false" autocomplete="off" autocapitalize="off" placeholder="METABOLISM1:…"></textarea>
+      <button type="button" id="btn-import-go">この内容を読み込む</button>
+    </div>
+    <p class="fine io-msg" id="io-msg" role="status" hidden></p>
+    <div class="data-actions" id="ch1-again-row" hidden>
+      <button type="button" id="btn-ch1-again">第1章のまとめをもう一度見る</button>
+    </div>
     <p class="fine" id="dbg-line" hidden></p>
   </section>
 </main>
@@ -233,9 +269,30 @@
   </div>
 </div>
 
+<!-- v0.1.2：第1章 完 -->
+<div class="event ev-ch" id="event-ch1" hidden role="dialog" aria-modal="true" aria-labelledby="ch1-title">
+  <div class="ev-card">
+    <div class="ev-tag">CHAPTER 1 COMPLETE</div>
+    <h2 class="ev-big" id="ch1-title">第1章 解糖系と発酵 完</h2>
+    <ul class="ev-recap">
+      <li>グルコースは10の酵素反応を経て、2分子のピルビン酸になる。</li>
+      <li>NAD⁺ は使い捨てではない。乳酸デヒドロゲナーゼが NADH を NAD⁺ に戻し、解糖系を続けさせる。</li>
+      <li>つくられた乳酸は、輸送体 MCT で細胞の外へ運ばれ、細胞の中の乳酸はつり合った量に落ち着く。</li>
+    </ul>
+    <dl class="ev-stats" id="ch1-stats"></dl>
+    <p class="ev-line">NADH を NAD⁺ に戻す方法は、乳酸の生成だけではない。</p>
+    <p class="ev-line2">細胞はミトコンドリアで、酸素を使って NADH を再酸化することもできる。ただし酸素があっても、乳酸はつくられ得る（どちらにどれだけ流れるかは、細胞の種類や状態で変わる）。酸素を使う経路は、今後のアップデートで解放予定。</p>
+    <div class="ev-btns">
+      <button type="button" id="ch1-go">このまま続ける</button>
+      <button type="button" id="ch1-export" class="sub">セーブを書き出す</button>
+    </div>
+  </div>
+</div>
+
 <script src="js/data.js"></script>
 <script src="js/glossary.js"></script>
 <script src="js/sim.js"></script>
+<script src="js/savecode.js"></script>
 <script src="js/aggregate.js"></script>
 <script src="js/ui.js"></script>
 </body>
