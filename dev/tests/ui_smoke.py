@@ -23,7 +23,7 @@ def serve(index):
             for k, v in headers: self.send_header(k, v)
             super().end_headers()
         def log_message(self, *a): pass
-    H.extensions_map.update({'.js': 'text/javascript', '.svg': 'image/svg+xml'})
+    H.extensions_map.update({'.js': 'text/javascript', '.svg': 'image/svg+xml', '.webmanifest': 'application/manifest+json'})
     srv = socketserver.ThreadingTCPServer(('127.0.0.1', 0), functools.partial(H, directory=str(pub)))
     srv.daemon_threads = True
     threading.Thread(target=srv.serve_forever, daemon=True).start()

@@ -40,7 +40,7 @@ async def main():
         print('[R1] 初回起動（公開時の画面）')
         ctx, pg = await ctx_page()
         await pg.goto(BASE); await pg.wait_for_timeout(900)
-        ok(await pg.title() == 'METABOLISM — 代謝のインクリメンタルゲーム' and (await pg.text_content('#ver')).strip() == 'v0.2.0', 'タイトルとバージョン v0.2.0')
+        ok(await pg.title() == 'METABOLISM — 代謝のインクリメンタルゲーム' and (await pg.text_content('#ver')).strip() == 'v0.2.1', 'タイトルとバージョン v0.2.1')
         ok(await pg.is_visible('#sheet') and '遊び方' in await pg.text_content('#sheet-title'), '初回は「遊び方」が自動で開く')
         body = await pg.text_content('#sheet-body')
         ok(all(k in body for k in ['グルコースを入れる', '研究ポイント', '次の目標', '新しい細胞で再開', '保存', '単純化']), '遊び方：基本の操作・タブ・保存・単純化への案内')

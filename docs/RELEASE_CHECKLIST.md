@@ -1,9 +1,9 @@
-# 公開チェックリスト（METABOLISM v0.2.0）
+# 公開チェックリスト（METABOLISM v0.2.1）
 
-公開用ビルド：**v0.2.0**。`public/` の各ファイルの SHA-256 は `docs/MANIFEST_v0.2.0.sha256` に記録してあります。
+公開用ビルド：**v0.2.1**。`public/` の各ファイルの SHA-256 は `docs/MANIFEST_v0.2.1.sha256` に記録してあります。
 公開前・公開後に `python3 dev/tools/verify_manifest.py` を実行し、「すべて一致」になることを確認してください（ファイルが意図せず変わっていないことの確認）。
 
-> この版では、代謝の計算・ゲームバランスの変更は行いません（追加はセーブの書き出し・読み込みと第1章 完の画面）。チェックで不具合が見つかった場合は、内容と影響を記録して判断します（下の「不具合の記録」）。
+> v0.2.1 では、代謝の計算・ゲームバランス・セーブの形式の変更は行いません（追加はホーム画面から独立したアプリとして開くための manifest と meta タグだけ）。チェックで不具合が見つかった場合は、内容と影響を記録して判断します（下の「不具合の記録」）。
 
 ---
 
@@ -38,13 +38,17 @@
 気づいたこと（端末名・OS の版・内容）：
 
 ## C. 公開直後（`https://<名前>.pages.dev`）
-- [ ] ページが開き、タイトル「METABOLISM — 代謝のインクリメンタルゲーム」、ヘッダに「v0.2.0」
+- [ ] ページが開き、タイトル「METABOLISM — 代謝のインクリメンタルゲーム」、ヘッダに「v0.2.1」
 - [ ] `https://<名前>.pages.dev/LICENSE.txt` で GPL-3.0 の全文が出る（トップ画面が出る場合は、古い版のファイルが登録されている）
 - [ ] 初回に「遊び方」が開く。再読み込みすると開かない
-- [ ] 開発者ツール →「ネットワーク」：読み込みが自サイトのファイルだけ（index.html・style.css・js 6つ・favicon.ico・icon-192.png）
+- [ ] 開発者ツール →「ネットワーク」：読み込みが自サイトのファイルだけ（index.html・style.css・js 6つ・favicon.ico・icon-192.png・manifest.webmanifest）
 - [ ] `https://<名前>.pages.dev/og-image.jpg` が画像として開く。`index.html` の `og:url`・`og:image` の住所が、実際の公開URLと同じ
 - [ ] X・LINE・Discord などに公開URLを貼ると、タイトル・説明文・画像（METABOLISM のバナー）のプレビューが出る（X は投稿画面のプレビュー、Facebook は Sharing Debugger でも確かめられる）
 - [ ] iPhone の Safari で「ホーム画面に追加」すると、M のアイコンになる。ブラウザのタブにも M のアイコンが出る
+- [ ] `https://<名前>.pages.dev/manifest.webmanifest` が JSON（`application/manifest+json`）で開く（トップ画面の HTML が出る場合は、manifest が登録されていない）
+- [ ] iPhone：ホーム画面の古い METABOLISM を削除してから、Safari で開き直して「ホーム画面に追加」。追加の画面に「Webアプリとして開く」が出て、オンになっている（iOS は追加した時点の情報を覚えるため、古いアイコンのままでは変わらない）
+- [ ] iPhone：ホーム画面のアイコンから開くと、画面下に URL バーが出ず、独立したアプリとして開く。名前が「METABOLISM」
+- [ ] iPhone：ホーム画面のアプリは Safari と保存領域が別。Safari の進み具合を使うときは、Safari の詳細タブ「書き出す」→ ホーム画面のアプリの「読み込む」で移せる
 - [ ] 開発者ツール →「コンソール」：エラー（CSP 違反を含む）がない
 - [ ] `curl -I https://<名前>.pages.dev/` で `Content-Security-Policy`・`X-Content-Type-Options`・`X-Frame-Options`・`Referrer-Policy`・`Permissions-Policy` が付いている
 - [ ] `https://<名前>.pages.dev/_headers` を開くと、設定ファイルの中身ではなくゲームのトップ画面が出る（Cloudflare Pages は 404.html がないとき、存在しない住所にトップページを返す。設定ファイルは配信されない）

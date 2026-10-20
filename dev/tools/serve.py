@@ -13,7 +13,7 @@ class H(http.server.SimpleHTTPRequestHandler):
         for k, v in HEADERS: self.send_header(k, v)
         super().end_headers()
     def log_message(self, *a): pass
-H.extensions_map.update({'.js': 'text/javascript', '.svg': 'image/svg+xml'})
+H.extensions_map.update({'.js': 'text/javascript', '.svg': 'image/svg+xml', '.webmanifest': 'application/manifest+json'})
 port = int(sys.argv[1]) if len(sys.argv) > 1 else 8787
 socketserver.TCPServer.allow_reuse_address = True
 with socketserver.TCPServer(('127.0.0.1', port), functools.partial(H, directory=str(PUB))) as s:

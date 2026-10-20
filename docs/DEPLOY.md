@@ -7,7 +7,7 @@ METABOLISM はビルド不要の静的サイトです。`public/` フォルダ�
 - [ ] `python3 dev/tools/verify_manifest.py` で、公開用ビルドが記録した版のままか確認
 - [x] リポジトリは**公開（Public）**にする（決定済み）。作る前に GitHub の設定 →「Emails」→「Keep my email addresses private」を有効にし、コミットに個人のメールアドレスが残らないようにする
 - [x] サイトの名前（`<名前>.pages.dev` になる。決定済み：konnyaku-metabolism）
-  - 共有プレビュー（OGP）の住所は `https://konnyaku-metabolism.pages.dev/` で書いてある。別の名前・独自ドメインにするときは、`public/index.html` の `canonical`・`og:url`・`og:image` の3か所を同じ住所に直し、`docs/MANIFEST_v0.2.0.sha256` を作り直す
+  - 共有プレビュー（OGP）の住所は `https://konnyaku-metabolism.pages.dev/` で書いてある。別の名前・独自ドメインにするときは、`public/index.html` の `canonical`・`og:url`・`og:image` の3か所を同じ住所に直し、`docs/MANIFEST_v0.2.1.sha256` を作り直す
 
 ## 1. GitHub にリポジトリを作る
 1. GitHub にログインし、右上の「+」→「New repository」。
@@ -43,9 +43,9 @@ METABOLISM はビルド不要の静的サイトです。`public/` フォルダ�
 ## 3. 公開後の確認（チェックリスト）
 
 > 最新のチェックリストは [RELEASE_CHECKLIST.md](RELEASE_CHECKLIST.md)（実機確認の表・公開直後・公開後しばらく・不具合の記録）。下は要約。
-- [ ] `https://<名前>.pages.dev` が開き、タイトルが「METABOLISM — 代謝のインクリメンタルゲーム」、ヘッダに「v0.2.0」
+- [ ] `https://<名前>.pages.dev` が開き、タイトルが「METABOLISM — 代謝のインクリメンタルゲーム」、ヘッダに「v0.2.1」
 - [ ] 初回に「遊び方」が開く。2回目からは開かない
-- [ ] ブラウザの開発者ツール →「ネットワーク」で、読み込みが自サイトのファイルだけ（index.html・css・js 6つ・favicon.ico・icon-192.png）
+- [ ] ブラウザの開発者ツール →「ネットワーク」で、読み込みが自サイトのファイルだけ（index.html・css・js 6つ・favicon.ico・icon-192.png・manifest.webmanifest）
 - [ ] 開発者ツール →「コンソール」にエラー（CSP 違反を含む）がない
 - [ ] レスポンスヘッダーに `Content-Security-Policy` などが付いている（`curl -I https://<名前>.pages.dev/`）
 - [ ] `https://<名前>.pages.dev/_headers` を開くと、設定ファイルの中身ではなくゲームのトップ画面が出る（Cloudflare Pages は 404.html がないとき、存在しない住所にトップページを返す。設定ファイルは配信されない）

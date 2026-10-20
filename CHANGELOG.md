@@ -1,5 +1,13 @@
 # 変更履歴
 
+## v0.2.1（2026-10-21）
+ホーム画面から**独立したアプリとして開く**ようにした版。ゲームの処理・計算・セーブの形式（キー `metabolism.save.v1`、形式 v7）は変更なし。
+- `public/manifest.webmanifest` を追加（`display: standalone`、`id`・`start_url`・`scope` は `./`、アイコンは `icon-192.png`）。`orientation` は指定しない（横向きの表示に対応しているため）
+- `index.html` に manifest の参照と、`apple-mobile-web-app-capable`・`mobile-web-app-capable`・`apple-mobile-web-app-title`（METABOLISM）を追加。これまでは iPhone でホーム画面に追加しても Safari の画面（下に URL バー）で開いていた
+- Service Worker は使わない（これまでどおり）。512px のアイコンは、確定版の元画像 `icon-1024.png` がリポジトリにないため保留
+- 表示の版を v0.2.1 に。`docs/MANIFEST_v0.2.1.sha256` を作成（`verify_manifest.py` もこちらを見る）。確認用の配信（`serve.py`・`ui_smoke.py`）で `.webmanifest` を `application/manifest+json` で返す
+- 公開後に、ホーム画面の古いアイコンを削除して追加し直す必要がある（`docs/RELEASE_CHECKLIST.md` の C）
+
 ## v0.2.0（2026-10-17）
 解糖系の調節を追加し、F1,6BP が溜まり続ける問題を解消。**代謝の計算が変わる版**（セーブの形式 v7。v1〜v6 のセーブはそのまま読める）。設計は `docs/DESIGN_v0.2.0.md`。
 - **PFK-1 の ATP による阻害と、ADP による解除**（実在の調節）：ATP が余っていると PFK-1 が抑えられ、解糖系を流れる量が「細胞が ATP を使う速さ」に合わせられる。係数 1/(1＋((ATP/20)/(1＋ADP/3))^4)

@@ -11,7 +11,7 @@
   const VIEW_KEY = 'metabolism.view';
   const INTRO_KEY = 'metabolism.intro';       // v0.1.0：初回の「遊び方」を出したかどうか
   const BACKUP_KEY = 'metabolism.save.backup'; // v0.1.2：読み込みで上書きする前のセーブ（1件だけ）
-  const VERSION = 'v0.2.0';
+  const VERSION = 'v0.2.1';
   // 開発者向けの機能（画面テスト用の state の窓口、計算の健全性の表示）は ?debug のときだけ有効にする
   const DEBUG = /(^|[?&])debug(=|&|$)/.test(location.search.slice(1));
   const TICK_MS = 100;

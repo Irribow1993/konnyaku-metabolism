@@ -1,0 +1,20 @@
+{
+  "name": "METABOLISM",
+  "short_name": "METABOLISM",
+  "description": "細胞の解糖系を動かし、研究を重ねて代謝のしくみを一つずつ明らかにしていく、生化学がテーマのインクリメンタルゲーム。",
+  "lang": "ja",
+  "id": "./",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#17191c",
+  "theme_color": "#17191c",
+  "icons": [
+    {
+      "src": "./icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ]
+}

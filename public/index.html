@@ -23,6 +23,11 @@
 <link rel="icon" href="favicon.ico" sizes="48x48">
 <link rel="icon" href="icon-192.png" type="image/png" sizes="192x192">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
+<!-- v0.2.1：ホーム画面から独立したアプリとして開く（iOS は apple-mobile-web-app-capable、ほかは manifest の display: standalone） -->
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="apple-mobile-web-app-title" content="METABOLISM">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
 <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
@@ -30,7 +35,7 @@
 <header class="top">
   <div class="bar">
     <span class="brand">METABOLISM</span>
-    <span class="proto" id="ver">v0.2.0</span>
+    <span class="proto" id="ver">v0.2.1</span>
     <button type="button" class="help" id="btn-help" aria-label="遊び方とこのゲームについて">?</button>
     <span class="sp"></span>
     <button class="rp-pill" id="rp-pill" type="button" data-tab="research">
@@ -155,7 +160,7 @@
       <button type="button" data-term="simplify">このゲームの単純化</button>
       <button type="button" data-term="saveinfo">保存について</button>
     </div>
-    <p class="fine about-ver">METABOLISM <span id="about-ver">v0.2.0</span> ― 生化学がテーマのインクリメンタルゲーム。数値と進め方はゲーム用に単純化しています。</p>
+    <p class="fine about-ver">METABOLISM <span id="about-ver">v0.2.1</span> ― 生化学がテーマのインクリメンタルゲーム。数値と進め方はゲーム用に単純化しています。</p>
     <dl class="credits" id="credits">
       <dt>作者</dt>
       <dd>こんにゃくお爺さん（<a href="https://note.com/irribow1993" target="_blank" rel="noopener noreferrer">note のプロフィール</a>）</dd>
