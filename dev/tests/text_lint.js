@@ -143,12 +143,16 @@ console.log('[2e] v0.1.0 公開版（v0.2.0 で版を更新）');
   const shownTexts = texts.filter(([w]) => !/^REACTIONS/.test(w) && w !== 'ui.js' && w !== 'index.html').map(t => t[1]).join('\n');
   const htmlBody = html.replace(/<!--[\s\S]*?-->/g, '');
   ok(!/Prototype|プロトタイプ/.test(shownTexts) && !/Prototype/.test(htmlBody), '画面に出る文言に「Prototype」が残っていない（開発中の版の呼び名）');
-  ok(/id="ver">v0\.2\.1</.test(html) && /id="about-ver">v0\.2\.1</.test(html) && /const VERSION = 'v0\.2\.1'/.test(ui) && /<title>METABOLISM — 代謝のインクリメンタルゲーム<\/title>/.test(html), 'タイトルとバージョン v0.2.1');
+  ok(/id="ver">v0\.2\.2</.test(html) && /id="about-ver">v0\.2\.2</.test(html) && /const VERSION = 'v0\.2\.2'/.test(ui) && /<title>METABOLISM — 代謝のインクリメンタルゲーム<\/title>/.test(html), 'タイトルとバージョン v0.2.2');
   ok(G.howto && G.simplify && G.saveinfo && /data-term="howto"/.test(html) && /btn-help/.test(html) && /openTerm\('howto'\)/.test(ui), '遊び方・このゲームの単純化・保存についての説明があり、「?」ボタンと詳細タブから開ける');
   ok(/量の単位 u はゲーム独自の単位/.test(G.simplify.body) && /嫌気的条件/.test(G.simplify.body) && /解析・同定/.test(G.simplify.body) && /ゲーム上の仕組み/.test(G.simplify.body), '単純化の注記：単位・嫌気的条件・解析と同定・ゲーム上の仕組み');
   ok(/if \(DEBUG\) window\.__METABOLISM_DEBUG__/.test(ui) && !/^\s*window\.__METABOLISM_DEBUG__/m.test(ui) && /if \(DEBUG\) \{ \$\('dbg-line'\)/.test(ui), '開発者向けの窓口（state の公開）と計算の健全性の表示は ?debug のときだけ');
   const all = ['index.html', 'css/style.css', 'js/data.js', 'js/glossary.js', 'js/sim.js', 'js/savecode.js', 'js/aggregate.js', 'js/ui.js'].map(f => fs.readFileSync(path.join(pub, f), 'utf8')).join('\n');
-  const allNoCredits = all.replace(/<dl class="credits"[\s\S]*?<\/dl>/, '').replace(/\/\*[\s\S]*?\*\//g, '');
+  // v0.2.2：<head> の canonical と og の項目にある自サイトの住所（共有プレビュー用。読み込みも通信もしない）だけは数えない。
+  //  それ以外の場所・それ以外の住所は、これまでどおり外部の URL として失敗させる
+  const selfMeta = /<link rel="canonical" href="https:\/\/konnyaku-metabolism\.pages\.dev\/[^"]*">|<meta property="og:[a-z:_]+" content="https:\/\/konnyaku-metabolism\.pages\.dev\/[^"]*">/g;
+  const allNoCredits = all.replace(/<head>[\s\S]*?<\/head>/, h => h.replace(selfMeta, '')).replace(/<dl class="credits"[\s\S]*?<\/dl>/, '').replace(/\/\*[\s\S]*?\*\//g, '');
+  ok(!fs.existsSync(path.join(pub, 'og-image.jpg')) && !fs.existsSync(path.join(pub, 'favicon.svg')) && /og:image" content="https:\/\/konnyaku-metabolism\.pages\.dev\/ogp\.png"/.test(html), 'v0.2.2：共有プレビューの画像は ogp.png だけ。使われていない og-image.jpg・favicon.svg が public/ に残っていない');
   ok(!/https?:\/\/(?!www\.w3\.org\/2000\/svg)/.test(allNoCredits) && !/fetch\(|XMLHttpRequest|WebSocket|sendBeacon|EventSource|import\(|document\.cookie/.test(all), '外部への通信・外部の URL・Cookie を使わない（SVG の名前空間 URI と、作者・ライセンス欄のリンク・コメントを除く）');
   const links = [...html.matchAll(/<a [^>]*href="([^"]+)"[^>]*>/g)];
   ok(links.length === 3 && links.every(m => /target="_blank"/.test(m[0]) && /rel="noopener/.test(m[0])) && links.map(m => m[1]).join() === 'https://note.com/irribow1993,LICENSE.txt,https://creativecommons.org/licenses/by-nc-sa/4.0/deed.ja',

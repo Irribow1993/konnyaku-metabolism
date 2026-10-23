@@ -1,6 +1,6 @@
 # METABOLISM
 
-**生化学がテーマのインクリメンタルゲーム** ― v0.2.1
+**生化学がテーマのインクリメンタルゲーム** ― v0.2.2
 
 細胞の中で糖（グルコース）を分解する「解糖系」を動かし、研究を重ねて、代謝のしくみを一つずつ明らかにしていくゲームです。
 ブラウザだけで遊べます（インストール・アカウント登録は不要）。スマートフォン・PC の両方に対応しています。
@@ -37,7 +37,7 @@
 ## ファイル構成
 ```
 public/          … 公開するゲーム本体（静的ファイル。これだけを配信する）
-  index.html, css/, js/, og-image.jpg, favicon.ico, icon-192.png, apple-touch-icon.png, robots.txt, LICENSE.txt（GPL-3.0 の全文）
+  index.html, css/, js/, manifest.webmanifest, ogp.png, favicon.ico, icon-192.png, apple-touch-icon.png, robots.txt, LICENSE.txt（GPL-3.0 の全文）
   _headers       … Cloudflare Pages 用のセキュリティヘッダー（配信はされない）
 dev/             … 開発用（テスト・調整用の道具。公開はしない）
 docs/            … 公開手順・既知の制約・公開チェックリスト・作者名とライセンスの決定・ビルドの SHA-256・F1,6BP の蓄積の分析・v0.2.0 の設計

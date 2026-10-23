@@ -1,5 +1,13 @@
 # 変更履歴
 
+## v0.2.2（2026-10-21）
+公開物の整理（共通仕様化 Phase 0）。**ゲームの仕組み・計算・バランス・セーブの形式（キー `metabolism.save.v1`、形式 v7）は変更なし**（`public/js/` の計算・データ・文章・セーブと `public/css/` は v0.2.1 と同じファイル）。
+- 共有プレビュー（OGP）の画像を `ogp.png`（1200×630、PNG）に一本化。2026-10-21 に作者が差し替え、すでに `og:image` が参照していた画像。使われなくなった `og-image.jpg` を削除
+- 使われていない `favicon.svg` を削除（v0.2.0 で削除したことにしていたが、ファイルが残っていた。GitHub のアップロードでは削除が反映されないため）
+- 表示の版を v0.2.2 に。`docs/MANIFEST_v0.2.2.sha256` を作成（`verify_manifest.py` もこちらを見る）。過去の `MANIFEST_v0.2.0`・`v0.2.1` は公開時の記録として変更しない
+- 開発用：`text_lint.js` の「外部の URL を使わない」の確認が、v0.2.0 で入れた共有プレビューの住所（`<head>` の canonical・og:url・og:image）を数えて失敗していたのを修正。許可するのは `<head>` の canonical と og の項目にある `https://konnyaku-metabolism.pages.dev/` で始まる住所だけ。削除した2ファイルが `public/` に無いことの確認を追加
+- docs の文字化けした名前の重複ファイル（`作者名とライセンスの決定.md` と同じ内容）を削除。`DEPLOY.md` に、削除はアップロードではできないこと、版・CHANGELOG・MANIFEST・git タグを同じ版にそろえることを追記
+
 ## v0.2.1（2026-10-21）
 ホーム画面から**独立したアプリとして開く**ようにした版。ゲームの処理・計算・セーブの形式（キー `metabolism.save.v1`、形式 v7）は変更なし。
 - `public/manifest.webmanifest` を追加（`display: standalone`、`id`・`start_url`・`scope` は `./`、アイコンは `icon-192.png`）。`orientation` は指定しない（横向きの表示に対応しているため）
@@ -21,7 +29,7 @@
 - 酵素カード（PFK-1・PK）に、実装した調節と、いまの係数を表示。詳細タブの反応の定義に調節の式と GLUT の式
 - 用語カード：「ATP による PFK-1 の抑制」「グルコース輸送体（GLUT）」を追加。「調節」「このゲームの単純化」を更新
 - セーブ v7（移行で増えるのは glcReturned: 0 だけ）。v0.1.2 で溜まっていた F1,6BP は、読み込み後およそ25分で 10 u 未満に減る。v0.1.2 で v7 のセーブを読み込むと「新しい版」として断る
-- **共有プレビュー（OGP）とアイコン**（2026-10-18、公開前に追加。ゲームの中身は変更なし）：`og-image.jpg`（1200×630。作者の画像 `ogp.png` を JPEG にして 579KB → 42KB）、`og:*`・`twitter:card`（summary_large_image）・`canonical`。アイコンを確定版の M（`icon-1024.png` から `favicon.ico`［16・32・48］、`icon-192.png`、`apple-touch-icon.png`［180］）にし、`favicon.svg` は削除。住所は `https://konnyaku-metabolism.pages.dev/`
+- **共有プレビュー（OGP）とアイコン**（2026-10-18、公開前に追加。ゲームの中身は変更なし）：`og-image.jpg`（1200×630。作者の画像 `ogp.png` を JPEG にして 579KB → 42KB）、`og:*`・`twitter:card`（summary_large_image）・`canonical`。アイコンを確定版の M（`icon-1024.png` から `favicon.ico`［16・32・48］、`icon-192.png`、`apple-touch-icon.png`［180］）にし、`favicon.svg` は削除。住所は `https://konnyaku-metabolism.pages.dev/`（v0.2.2 で、作者が差し替えた `ogp.png` に一本化）
 - 開発用：`dev/tests/v020_tests.js`（4条件の検証。V3 に、取り込みと戻りが入れ替わる条件で毎秒の二重計上・炭素の収支を確かめる試験）、`dev/tools/corner_long.js`（極端な条件の 24 時間の延長試験）、`dev/tests/legacy_sim.js`（v0.2.0 のコードに v0.1.2 のパラメータを与え、以前の版とビット単位で比べる）、`dev/tests/baseline_0.1.2/`。既存のテストは計算の変更に合わせて更新（`run_tests.js` の先頭に一覧）
 
 ## v0.1.2（2026-10-17）

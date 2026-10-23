@@ -43,7 +43,7 @@ METABOLISM はビルド不要の静的サイトです。`public/` フォルダ�
 ## 3. 公開後の確認（チェックリスト）
 
 > 最新のチェックリストは [RELEASE_CHECKLIST.md](RELEASE_CHECKLIST.md)（実機確認の表・公開直後・公開後しばらく・不具合の記録）。下は要約。
-- [ ] `https://<名前>.pages.dev` が開き、タイトルが「METABOLISM — 代謝のインクリメンタルゲーム」、ヘッダに「v0.2.1」
+- [ ] `https://<名前>.pages.dev` が開き、タイトルが「METABOLISM — 代謝のインクリメンタルゲーム」、ヘッダに「v0.2.2」
 - [ ] 初回に「遊び方」が開く。2回目からは開かない
 - [ ] ブラウザの開発者ツール →「ネットワーク」で、読み込みが自サイトのファイルだけ（index.html・css・js 6つ・favicon.ico・icon-192.png・manifest.webmanifest）
 - [ ] 開発者ツール →「コンソール」にエラー（CSP 違反を含む）がない
@@ -56,7 +56,9 @@ METABOLISM はビルド不要の静的サイトです。`public/` フォルダ�
 ## 4. 更新するとき
 1. ファイルを直して `git commit`・`git push` すると、自動で公開し直される。
 2. 版を上げたときは、`public/index.html` の `id="ver"`・`id="about-ver"`、`public/js/ui.js` の `VERSION`、CHANGELOG.md を更新する。
-3. セーブの形式を変えるときは、`public/js/sim.js` の `SAVE_VERSION` を上げ、移行（MIGRATIONS）を追加する。保存場所の名前（`metabolism.save.v1`）は変えない（変えると、これまでの保存が読めなくなる）。
+3. 公開する版ごとに、`APP_VERSION`（上の版の表示）・`CHANGELOG.md`・`docs/MANIFEST_v<版>.sha256`（`dev/tools/verify_manifest.py` の照合先も合わせる）・git のタグ `v<版>` の4つを同じ版にそろえる（v0.2.1 から。タグは公開を確定したときに付ける：`git tag v<版> && git push origin v<版>`、または GitHub の「Releases」→「Draft a new release」でタグを作る）。
+4. **ファイルを削除するときは、「Add files via upload」ではなく、GitHub の画面でファイルを開いて「Delete file」を使うか、`git rm` を使う**（アップロードでは削除が反映されない。v0.2.0 で `favicon.svg` が残ったのはこのため）。
+5. セーブの形式を変えるときは、`public/js/sim.js` の `SAVE_VERSION` を上げ、移行（MIGRATIONS）を追加する。保存場所の名前（`metabolism.save.v1`）は変えない（変えると、これまでの保存が読めなくなる）。
 
 ## 5. 独自ドメインを使う場合（任意）
 Cloudflare Pages のプロジェクト →「Custom domains」で追加する。**ドメインが変わると保存が別になる**ため、独自ドメインに移すなら、多くの人が遊び始める前に行うのがよい。

@@ -1,9 +1,9 @@
-# 公開チェックリスト（METABOLISM v0.2.1）
+# 公開チェックリスト（METABOLISM v0.2.2）
 
-公開用ビルド：**v0.2.1**。`public/` の各ファイルの SHA-256 は `docs/MANIFEST_v0.2.1.sha256` に記録してあります。
+公開用ビルド：**v0.2.2**。`public/` の各ファイルの SHA-256 は `docs/MANIFEST_v0.2.2.sha256` に記録してあります。
 公開前・公開後に `python3 dev/tools/verify_manifest.py` を実行し、「すべて一致」になることを確認してください（ファイルが意図せず変わっていないことの確認）。
 
-> v0.2.1 では、代謝の計算・ゲームバランス・セーブの形式の変更は行いません（追加はホーム画面から独立したアプリとして開くための manifest と meta タグだけ）。チェックで不具合が見つかった場合は、内容と影響を記録して判断します（下の「不具合の記録」）。
+> v0.2.2 では、代謝の計算・ゲームバランス・セーブの形式の変更は行いません（公開物の整理だけ：使われていない `og-image.jpg`・`favicon.svg` の削除と版の表示。v0.2.1 ではホーム画面から独立したアプリとして開くための manifest と meta タグを追加）。チェックで不具合が見つかった場合は、内容と影響を記録して判断します（下の「不具合の記録」）。
 
 ---
 
@@ -38,11 +38,13 @@
 気づいたこと（端末名・OS の版・内容）：
 
 ## C. 公開直後（`https://<名前>.pages.dev`）
-- [ ] ページが開き、タイトル「METABOLISM — 代謝のインクリメンタルゲーム」、ヘッダに「v0.2.1」
+- [ ] ページが開き、タイトル「METABOLISM — 代謝のインクリメンタルゲーム」、ヘッダに「v0.2.2」
 - [ ] `https://<名前>.pages.dev/LICENSE.txt` で GPL-3.0 の全文が出る（トップ画面が出る場合は、古い版のファイルが登録されている）
 - [ ] 初回に「遊び方」が開く。再読み込みすると開かない
 - [ ] 開発者ツール →「ネットワーク」：読み込みが自サイトのファイルだけ（index.html・style.css・js 6つ・favicon.ico・icon-192.png・manifest.webmanifest）
-- [ ] `https://<名前>.pages.dev/og-image.jpg` が画像として開く。`index.html` の `og:url`・`og:image` の住所が、実際の公開URLと同じ
+- [ ] `https://<名前>.pages.dev/ogp.png` が画像として開く。`index.html` の `og:url`・`og:image` の住所が、実際の公開URLと同じ
+- [ ] `https://<名前>.pages.dev/og-image.jpg`・`/favicon.svg` を開くと、画像ではなくゲームのトップ画面が出る（v0.2.2 の削除が公開に反映されている）
+- [ ] SNS のプレビューに古い画像（`og-image.jpg` の版）が出るときは、各サービスのキャッシュを確かめる（X は投稿画面のプレビュー、Facebook は Sharing Debugger の「もう一度スクレイピング」）
 - [ ] X・LINE・Discord などに公開URLを貼ると、タイトル・説明文・画像（METABOLISM のバナー）のプレビューが出る（X は投稿画面のプレビュー、Facebook は Sharing Debugger でも確かめられる）
 - [ ] iPhone の Safari で「ホーム画面に追加」すると、M のアイコンになる。ブラウザのタブにも M のアイコンが出る
 - [ ] `https://<名前>.pages.dev/manifest.webmanifest` が JSON（`application/manifest+json`）で開く（トップ画面の HTML が出る場合は、manifest が登録されていない）
