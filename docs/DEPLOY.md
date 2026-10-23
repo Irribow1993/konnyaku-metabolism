@@ -4,7 +4,7 @@ METABOLISM はビルド不要の静的サイトです。`public/` フォルダ�
 
 ## 0. 公開前に決めること
 - [x] 作者名・連絡先・ライセンス（決定済み：こんにゃくお爺さん／note のプロフィール／プログラム GPL-3.0・解説文は CC BY-NC-SA 4.0。[作者名とライセンスの決定.md](作者名とライセンスの決定.md)）
-- [ ] `python3 dev/tools/verify_manifest.py` で、公開用ビルドが記録した版のままか確認
+- [ ] `python3 dev/tools/verify_manifest.py` で、公開用ビルドが記録した版のままか確認（`python3 dev/tests/version_check.py` で版のそろい具合も確認）
 - [x] リポジトリは**公開（Public）**にする（決定済み）。作る前に GitHub の設定 →「Emails」→「Keep my email addresses private」を有効にし、コミットに個人のメールアドレスが残らないようにする
 - [x] サイトの名前（`<名前>.pages.dev` になる。決定済み：konnyaku-metabolism）
   - 共有プレビュー（OGP）の住所は `https://konnyaku-metabolism.pages.dev/` で書いてある。別の名前・独自ドメインにするときは、`public/index.html` の `canonical`・`og:url`・`og:image` の3か所を同じ住所に直し、`docs/MANIFEST_v0.2.1.sha256` を作り直す
@@ -55,10 +55,26 @@ METABOLISM はビルド不要の静的サイトです。`public/` フォルダ�
 
 ## 4. 更新するとき
 1. ファイルを直して `git commit`・`git push` すると、自動で公開し直される。
-2. 版を上げたときは、`public/index.html` の `id="ver"`・`id="about-ver"`、`public/js/ui.js` の `VERSION`、CHANGELOG.md を更新する。
-3. 公開する版ごとに、`APP_VERSION`（上の版の表示）・`CHANGELOG.md`・`docs/MANIFEST_v<版>.sha256`（`dev/tools/verify_manifest.py` の照合先も合わせる）・git のタグ `v<版>` の4つを同じ版にそろえる（v0.2.1 から。タグは公開を確定したときに付ける：`git tag v<版> && git push origin v<版>`、または GitHub の「Releases」→「Draft a new release」でタグを作る）。
+2. 版を上げたときは、次の場所を同じ版にする。
+   - `public/index.html` の `id="ver"`・`id="about-ver"`、`public/js/ui.js` の `VERSION`（v0.2.3 から `APP_VERSION`）
+   - `CHANGELOG.md` の先頭の項
+   - `README.md` の冒頭、`docs/RELEASE_CHECKLIST.md`・`docs/KNOWN_LIMITATIONS.md` の見出し、この文書の「3. 公開後の確認」の版
+   - `dev/tests/text_lint.js`・`dev/tests/release_check.py` の版の確認
+   そのあと `python3 dev/tools/make_manifest.py v<版>` で `docs/MANIFEST_v<版>.sha256` を作り、`python3 dev/tests/version_check.py` が「すべて v<版> でそろっている」になることを確かめる。`verify_manifest.py` は最新の版（SemVer の数値順。v0.2.10 は v0.2.9 より新しい）の MANIFEST を自動で選ぶので、書き換えは要らない。過去の版の MANIFEST は書き換えない。
+3. 公開する版ごとに、`APP_VERSION`（上の版の表示）・`CHANGELOG.md`・`docs/MANIFEST_v<版>.sha256`・git のタグ `v<版>` の4つを同じ版にそろえる（v0.2.1 から。タグは公開を確定したときに付ける：`git tag v<版> && git push origin v<版>`、または GitHub の「Releases」→「Draft a new release」でタグを作る）。
 4. **ファイルを削除するときは、「Add files via upload」ではなく、GitHub の画面でファイルを開いて「Delete file」を使うか、`git rm` を使う**（アップロードでは削除が反映されない。v0.2.0 で `favicon.svg` が残ったのはこのため）。
 5. セーブの形式を変えるときは、`public/js/sim.js` の `SAVE_VERSION` を上げ、移行（MIGRATIONS）を追加する。保存場所の名前（`metabolism.save.v1`）は変えない（変えると、これまでの保存が読めなくなる）。
 
-## 5. 独自ドメインを使う場合（任意）
+## 5. 公開した版を戻すとき（ロールバック）
+GitHub の `main` を正本とし、公開サイトは常に `main` と同じ状態にする。
+
+1. **ふだんの戻し方**：GitHub 側で、正常だった版に戻す新しいコミットを作る。
+   - git を使う場合：`git revert <戻したいコミット>`（複数あれば新しい順に）、または `git checkout v<正常な版> -- public` で正常な版の `public/` を取り出し、余分なファイルを `git rm` してコミットする。
+   - GitHub の画面だけで行う場合：正常な版のファイルをアップロードし直すだけでは、その後に**追加されたファイルが消えない**。追加されたファイルは「Delete file」で削除する（github.dev ならまとめて削除できる）。
+   - どちらの場合も、`python3 dev/tools/verify_manifest.py v<正常な版>` が「すべて一致」になることを確かめる。
+2. **緊急の戻し方**：遊べないなど急ぐときは、Cloudflare のダッシュボード →「Deployments」→ 正常だったデプロイの「…」→「Rollback to this deployment」で、公開サイトだけをすぐに戻す。**このままでは GitHub と公開サイトが食い違う**ので、続けて 1 を行い、GitHub の `main` を正常な版にそろえる（そろえたあとの自動の公開で、公開サイトも `main` と同じになる）。
+3. 戻した版にはタグを付け直さない（元の版のタグがそのまま正しい）。不具合を直した版は、新しい版として公開する。
+4. セーブは端末の中にあり、サイトを戻しても消えない。セーブの形式（`SAVE_VERSION`）を上げた版を戻すと、新しい形式のセーブを古い版が読めない場合があるので、セーブの形式を変える版はとくに慎重に公開する。
+
+## 6. 独自ドメインを使う場合（任意）
 Cloudflare Pages のプロジェクト →「Custom domains」で追加する。**ドメインが変わると保存が別になる**ため、独自ドメインに移すなら、多くの人が遊び始める前に行うのがよい。

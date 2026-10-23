@@ -59,6 +59,15 @@ node dev/tests/v020_tests.js                                 # v0.2.0 の4条件
 node dev/tests/text_lint.js                                  # 表示文言・公開前の静的チェック
 python3 dev/tests/ui_smoke.py public/index.html              # 画面操作（Playwright と Chromium が必要）
 python3 dev/tests/release_check.py http://127.0.0.1:8787/    # 公開時の画面での確認（serve.py を起動してから）
+python3 dev/tests/version_check.py                           # 版のそろい具合（表示・JS・CHANGELOG・MANIFEST・文書）と public/ の照合
+python3 dev/tests/manifest_tests.py                          # MANIFEST の作成・照合と版の検査そのもののテスト
+```
+
+公開用ビルドの記録（`docs/MANIFEST_v<版>.sha256`）：
+```
+python3 dev/tools/make_manifest.py v<版>    # 新しい版の MANIFEST を作る（過去の版は書き換えない）
+python3 dev/tools/verify_manifest.py        # public/ を最新の版（SemVer の数値順）の MANIFEST と照合
+python3 dev/tools/verify_manifest.py v<版>  # 版を指定して照合
 ```
 `?debug=1` を付けて開くと、画面テスト用の窓口と計算の健全性の表示が有効になります（公開時の画面には出ません）。
 

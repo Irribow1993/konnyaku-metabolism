@@ -1,5 +1,13 @@
 # 変更履歴
 
+## 未公開（次の版 v0.2.3 に含める）
+開発用の道具と文書だけの変更（共通仕様化 Phase 1A の非公開部分）。**`public/` のファイルは変更していない**（`verify_manifest.py` は v0.2.2 のまま一致）。
+- `dev/tools/make_manifest.py` を追加。`docs/MANIFEST_v<版>.sha256` を作る。表示の版と違う版・記録済みより古い版・すでにある版では作らない（過去の MANIFEST は書き換えない）。
+- `dev/tools/verify_manifest.py`：照合先を版ごとに書き換えなくてよいよう、最新の MANIFEST を SemVer の数値順で自動で選ぶ。版を指定した照合もできる。
+- `dev/tests/version_check.py` を追加。表示・JS・CHANGELOG・最新の MANIFEST・README・公開文書の版がそろっているか、`public/` が MANIFEST と一致するかを確かめる。
+- `dev/tests/manifest_tests.py` を追加。版や公開ファイルをわざと食い違わせて、上の検査が失敗することを確かめる。
+- `docs/DEPLOY.md` に版を上げる手順とロールバックの手順（GitHub を正本に戻す。Cloudflare の戻し方は緊急用）、`docs/RELEASE_CHECKLIST.md`・`README.md` に新しい検査を追記。
+
 ## v0.2.2（2026-10-21）
 公開物の整理（共通仕様化 Phase 0）。**ゲームの仕組み・計算・バランス・セーブの形式（キー `metabolism.save.v1`、形式 v7）は変更なし**（`public/js/` の計算・データ・文章・セーブと `public/css/` は v0.2.1 と同じファイル）。
 - 共有プレビュー（OGP）の画像を `ogp.png`（1200×630、PNG）に一本化。2026-10-21 に作者が差し替え、すでに `og:image` が参照していた画像。使われなくなった `og-image.jpg` を削除

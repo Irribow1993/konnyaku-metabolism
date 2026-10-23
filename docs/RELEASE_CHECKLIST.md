@@ -10,7 +10,9 @@
 ## A. 公開前（開発者の手元）
 - [x] 作者名・連絡先・ライセンスを決め、README に記入し、`LICENSE`（GPL-3.0）を置いた（2026-10-17）
 - [ ] `python3 dev/tools/verify_manifest.py` → すべて一致
-- [ ] （任意）自動テスト：`node dev/tests/run_tests.js`・`node dev/tests/savecode_tests.js`・`node dev/tests/text_lint.js` → すべて成功
+- [ ] `python3 dev/tests/version_check.py` → 「すべて v<版> でそろっている」（表示・JS・CHANGELOG・最新の MANIFEST・README・この文書などの版が一致し、`public/` が MANIFEST と一致）
+- [ ] 新しい版の `docs/MANIFEST_v<版>.sha256` を `python3 dev/tools/make_manifest.py v<版>` で作った。過去の版の MANIFEST は変更していない（`git diff --stat docs/MANIFEST_*` に新しい版の1件だけ）
+- [ ] （任意）自動テスト：`node dev/tests/run_tests.js`・`node dev/tests/savecode_tests.js`・`node dev/tests/text_lint.js`・`python3 dev/tests/manifest_tests.py` → すべて成功
 - [ ] GitHub の「Keep my email addresses private」を有効にした（コミットに個人のメールアドレスを残さない）
 - [ ] リポジトリを **Public** で作成し、トップに README・LICENSE が表示される（GitHub が「GPL-3.0 license」と認識している）
 
@@ -62,6 +64,8 @@
 - [ ] 1時間ほど閉じてから開くと「留守のあいだの … を進めました」
 - [ ] 遊んでくれた人からの不具合報告を確認する（連絡先を載せた場合）
 - [ ] Cloudflare のダッシュボードで、デプロイが「Success」のまま
+- [ ] 公開を確認したら、git のタグ `v<版>` を公開した版のコミットに付けた（GitHub の「Releases」→「Draft a new release」）
+- [ ] 公開サイトを Cloudflare の「Rollback to this deployment」で戻した場合は、GitHub の `main` も正常な版にそろえた（[DEPLOY.md](DEPLOY.md) の「5. 公開した版を戻すとき」）
 - [ ] 独自ドメインに移す場合は早めに（保存がドメインごとに別になるため）
 
 ## 不具合の記録
