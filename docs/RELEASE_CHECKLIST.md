@@ -9,10 +9,11 @@
 
 ## A. 公開前（開発者の手元）
 - [x] 作者名・連絡先・ライセンスを決め、README に記入し、`LICENSE`（GPL-3.0）を置いた（2026-10-17）
+- [ ] **`python3 dev/tests/pre_release.py` → 「すべて成功」（必須。1つでも失敗したら公開しない。以下の自動テストを順に実行する）**
 - [ ] `python3 dev/tools/verify_manifest.py` → すべて一致
 - [ ] `python3 dev/tests/version_check.py` → 「すべて v<版> でそろっている」（表示・JS・CHANGELOG・最新の MANIFEST・README・この文書などの版が一致し、`public/` が MANIFEST と一致）
 - [ ] 新しい版の `docs/MANIFEST_v<版>.sha256` を `python3 dev/tools/make_manifest.py v<版>` で作った。過去の版の MANIFEST は変更していない（`git diff --stat docs/MANIFEST_*` に新しい版の1件だけ）
-- [ ] （任意）自動テスト：`node dev/tests/run_tests.js`・`node dev/tests/savecode_tests.js`・`node dev/tests/text_lint.js`・`python3 dev/tests/manifest_tests.py` → すべて成功
+- [ ] 自動テスト（必須）：`node dev/tests/run_tests.js`・`node dev/tests/v020_tests.js`・`node dev/tests/savecode_tests.js`・`node dev/tests/text_lint.js`・`python3 dev/tests/manifest_tests.py`・`python3 dev/tests/ui_smoke.py public/index.html` → すべて成功（`pre_release.py` がまとめて実行する）
 - [ ] GitHub の「Keep my email addresses private」を有効にした（コミットに個人のメールアドレスを残さない）
 - [ ] リポジトリを **Public** で作成し、トップに README・LICENSE が表示される（GitHub が「GPL-3.0 license」と認識している）
 

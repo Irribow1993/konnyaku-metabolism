@@ -143,7 +143,12 @@ console.log('[2e] v0.1.0 公開版（v0.2.0 で版を更新）');
   const shownTexts = texts.filter(([w]) => !/^REACTIONS/.test(w) && w !== 'ui.js' && w !== 'index.html').map(t => t[1]).join('\n');
   const htmlBody = html.replace(/<!--[\s\S]*?-->/g, '');
   ok(!/Prototype|プロトタイプ/.test(shownTexts) && !/Prototype/.test(htmlBody), '画面に出る文言に「Prototype」が残っていない（開発中の版の呼び名）');
-  ok(/id="ver">v0\.2\.2</.test(html) && /id="about-ver">v0\.2\.2</.test(html) && /const VERSION = 'v0\.2\.2'/.test(ui) && /<title>METABOLISM — 代謝のインクリメンタルゲーム<\/title>/.test(html), 'タイトルとバージョン v0.2.2');
+  // 版は直書きしない（版を上げるたびに書き換え忘れて失敗するのを防ぐ）。表示の版 id="ver" を基準にし、id="about-ver"・ui.js の版が同じで、v<数>.<数>.<数> の書式であることを確かめる。
+  // 版が文書・MANIFEST とそろっているかは dev/tests/version_check.py が確かめる
+  const shownVer = (html.match(/id="ver">([^<]+)</) || [])[1];
+  const aboutVer = (html.match(/id="about-ver">([^<]+)</) || [])[1];
+  const jsVer = (ui.match(/const (?:APP_VERSION|VERSION) = '([^']+)'/) || [])[1];
+  ok(/^v\d+\.\d+\.\d+$/.test(shownVer || '') && aboutVer === shownVer && jsVer === shownVer && /<title>METABOLISM — 代謝のインクリメンタルゲーム<\/title>/.test(html), `タイトルとバージョン（表示 ${shownVer}・about ${aboutVer}・ui.js ${jsVer}）`);
   ok(G.howto && G.simplify && G.saveinfo && /data-term="howto"/.test(html) && /btn-help/.test(html) && /openTerm\('howto'\)/.test(ui), '遊び方・このゲームの単純化・保存についての説明があり、「?」ボタンと詳細タブから開ける');
   ok(/量の単位 u はゲーム独自の単位/.test(G.simplify.body) && /嫌気的条件/.test(G.simplify.body) && /解析・同定/.test(G.simplify.body) && /ゲーム上の仕組み/.test(G.simplify.body), '単純化の注記：単位・嫌気的条件・解析と同定・ゲーム上の仕組み');
   ok(/if \(DEBUG\) window\.__METABOLISM_DEBUG__/.test(ui) && !/^\s*window\.__METABOLISM_DEBUG__/m.test(ui) && /if \(DEBUG\) \{ \$\('dbg-line'\)/.test(ui), '開発者向けの窓口（state の公開）と計算の健全性の表示は ?debug のときだけ');

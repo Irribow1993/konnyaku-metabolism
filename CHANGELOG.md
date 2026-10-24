@@ -7,6 +7,11 @@
 - `dev/tests/version_check.py` を追加。表示・JS・CHANGELOG・最新の MANIFEST・README・公開文書の版がそろっているか、`public/` が MANIFEST と一致するかを確かめる。
 - `dev/tests/manifest_tests.py` を追加。版や公開ファイルをわざと食い違わせて、上の検査が失敗することを確かめる。
 - `docs/DEPLOY.md` に版を上げる手順とロールバックの手順（GitHub を正本に戻す。Cloudflare の戻し方は緊急用）、`docs/RELEASE_CHECKLIST.md`・`README.md` に新しい検査を追記。
+- GPT 審査（2026-10-24）の指摘への対応：
+  - F1：`docs/DEPLOY.md` に「`MANIFEST_v0.2.1.sha256` を作り直す」と読める記述があったのを、「新しい版として公開し、新しい版の MANIFEST を作る（過去の版は書き換えない）」に統一
+  - F2：`dev/tests/text_lint.js`・`dev/tests/release_check.py` が版を直書きしていたのを、`public/index.html` の表示の版から導くように変更（版上げで書き換えが要らない）。`text_lint.js` は表示の版・about の版・`ui.js` の版（`VERSION` または `APP_VERSION`）が同じことを確かめる。`version_check.py` は、この2本に版の直書きが戻ったら失敗する。公開前の自動テストを必須にし、`dev/tests/pre_release.py`（一括実行）を追加。`VERSION` から `APP_VERSION` への改名はしない（どちらの名前でも検査が通る）
+  - F4：`verify_manifest.py` が、MANIFEST の異常行（書式違い・重複・1行も無い）を、トレースバックではなく行番号つきのエラーで知らせる。異常系の試験を追加（`manifest_tests.py` は 32 → 61 項目）
+- v0.2.0 の日付を、GitHub の履歴の公開日（2026-10-19）に直した（作者の判断。v0.2.2 の日付は据え置き）。
 
 ## v0.2.2（2026-10-21）
 公開物の整理（共通仕様化 Phase 0）。**ゲームの仕組み・計算・バランス・セーブの形式（キー `metabolism.save.v1`、形式 v7）は変更なし**（`public/js/` の計算・データ・文章・セーブと `public/css/` は v0.2.1 と同じファイル）。
@@ -24,7 +29,7 @@
 - 表示の版を v0.2.1 に。`docs/MANIFEST_v0.2.1.sha256` を作成（`verify_manifest.py` もこちらを見る）。確認用の配信（`serve.py`・`ui_smoke.py`）で `.webmanifest` を `application/manifest+json` で返す
 - 公開後に、ホーム画面の古いアイコンを削除して追加し直す必要がある（`docs/RELEASE_CHECKLIST.md` の C）
 
-## v0.2.0（2026-10-17）
+## v0.2.0（2026-10-19）
 解糖系の調節を追加し、F1,6BP が溜まり続ける問題を解消。**代謝の計算が変わる版**（セーブの形式 v7。v1〜v6 のセーブはそのまま読める）。設計は `docs/DESIGN_v0.2.0.md`。
 - **PFK-1 の ATP による阻害と、ADP による解除**（実在の調節）：ATP が余っていると PFK-1 が抑えられ、解糖系を流れる量が「細胞が ATP を使う速さ」に合わせられる。係数 1/(1＋((ATP/20)/(1＋ADP/3))^4)
 - **PK の F1,6BP によるフィードフォワード活性化**（実在の調節。教育的な要素）：係数 1＋F1,6BP/(20＋F1,6BP)（最大 2 倍）。ADP 待ちのときは流れをほとんど変えない

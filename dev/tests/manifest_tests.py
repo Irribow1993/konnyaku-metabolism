@@ -112,5 +112,64 @@ code, out = run(w, VC)
 ok(code == 0 and f'すべて {nxt} でそろっている' in out, '版をそろえて MANIFEST を作ると成功する')
 ok(run(w, VM, cur)[0] == 1, '古い版との照合は失敗する（公開ファイルが変わったため）')
 
+print('[M7] MANIFEST の異常行（トレースバックではなく、行番号つきの分かりやすいエラー）')
+good = (ROOT / f'docs/MANIFEST_{cur}.sha256').read_text(encoding='utf-8')
+h0 = '0' * 64
+bad_manifests = [
+    ('パスが無い行（ハッシュだけ）', good + 'deadbeef\n', '行目が書式に合わない'),
+    ('ハッシュが短い', good + f'{h0[:60]}  public/x.txt\n', '行目が書式に合わない'),
+    ('ハッシュが16進でない', good + 'g' * 64 + '  public/x.txt\n', '行目が書式に合わない'),
+    ('大文字のハッシュ', good + 'A' * 64 + '  public/x.txt\n', '行目が書式に合わない'),
+    ('パスが public/ の外', good + f'{h0}  docs/x.txt\n', '行目が書式に合わない'),
+    ('同じパスが2回', good + good.splitlines()[0] + '\n', '重複'),
+    ('空のファイル', '', '1行も無い'),
+    ('空白だけ', '  \n\n', '1行も無い'),
+]
+for label, body, expect in bad_manifests:
+    w = fresh(); (w / f'docs/MANIFEST_{cur}.sha256').write_text(body, encoding='utf-8')
+    code, out = run(w, VM)
+    ok(code == 1 and 'Traceback' not in out and 'MANIFEST の書式エラー' in out and expect in out, f'verify_manifest：{label} → エラーを示して失敗（終了コード1）')
+    code, out = run(w, VC)
+    ok(code == 1 and 'Traceback' not in out and '✘ MANIFEST の書式エラー' in out, f'version_check：{label} → エラーを示して失敗')
+w = fresh(); (w / f'docs/MANIFEST_{cur}.sha256').write_text(good + 'deadbeef\n', encoding='utf-8')
+out = run(w, VM)[1]
+ok(f'MANIFEST_{cur}.sha256 の {len(good.splitlines()) + 1} 行目' in out, '壊れた行の行番号を示す')
+w = fresh(); (w / f'docs/MANIFEST_{cur}.sha256').write_text(good.replace('\n', '\r\n'), encoding='utf-8', newline='')
+ok(run(w, VM)[0] == 0, '改行が CRLF の MANIFEST も読める')
+ok(all(run(w, VM, v)[1].count('Traceback') == 0 for v in ('v0.1.0', 'v0.1.1', 'v0.2.0', 'v0.2.1')), '過去の版の MANIFEST もすべて書式エラーにならない')
+
+print('[M8] 開発用の検査（text_lint.js・release_check.py）が版上げで壊れない')
+for f in ('dev/tests/text_lint.js', 'dev/tests/release_check.py'):
+    w = fresh(); p = w / f
+    p.write_text(p.read_text(encoding='utf-8') + "\n// ok(/id=\"ver\">v0.2.2</.test(html))\n" if f.endswith('.js') else p.read_text(encoding='utf-8') + "\nX = (await pg.text_content('#ver')) == 'v0.2.2'\n", encoding='utf-8')
+    code, out = run(w, VC)
+    ok(code == 1 and '版の直書き' in out and f in out, f'{f} に版を直書きすると version_check が失敗し、その場所を示す')
+node = shutil.which('node')
+if node:
+    def lint(work): r = subprocess.run([node, 'dev/tests/text_lint.js'], cwd=work, capture_output=True, text=True); return r.returncode, r.stdout + r.stderr
+    ok(lint(fresh())[0] == 0, 'text_lint.js が今のリポジトリで成功する')
+    w = fresh()
+    for rel, old, new, _ in cases: sub(w, rel, old, new)
+    ok(lint(w)[0] == 0, '版を上げた（表示・ui.js・文書）あとも text_lint.js を書き換えずに成功する')
+    w = fresh(); sub(w, 'public/js/ui.js', f"VERSION = '{cur}'", f"VERSION = '{nxt}'")
+    code, out = lint(w)
+    ok(code == 1 and 'タイトルとバージョン' in out, 'ui.js の版だけ違うと text_lint.js が失敗する')
+    w = fresh(); sub(w, 'public/index.html', f'id="about-ver">{cur}<', f'id="about-ver">{nxt}<')
+    ok(lint(w)[0] == 1, 'about-ver の版だけ違うと text_lint.js が失敗する')
+    w = fresh()
+    for rel, old, new, _ in cases: sub(w, rel, old, new)
+    sub(w, 'public/js/ui.js', f"const VERSION = '{nxt}'", f"const APP_VERSION = '{nxt}'")
+    run(w, MM, nxt)
+    ok(lint(w)[0] == 0 and run(w, VC)[0] == 0, '版を上げて ui.js の版の名前を APP_VERSION に変えても、text_lint.js・version_check が通る')
+else:
+    print('  ・node が無いので text_lint.js の確認は省略（公開前は pre_release.py で必ず実行する）')
+
+print('[M9] 文書の方針：過去の MANIFEST を書き換えない')
+dep = (ROOT / 'docs/DEPLOY.md').read_text(encoding='utf-8')
+chk = (ROOT / 'docs/RELEASE_CHECKLIST.md').read_text(encoding='utf-8')
+ok(not re.search(r'MANIFEST_v\d+\.\d+\.\d+\.sha256`?\s*を(作り直|書き換|更新)', dep + chk), 'DEPLOY・RELEASE_CHECKLIST に、特定の版の MANIFEST を作り直す・書き換える記述が無い')
+ok('過去の版の MANIFEST は書き換えない' in dep and '新しい版として公開し' in dep, 'DEPLOY.md に「新しい版として MANIFEST を作る。過去は書き換えない」とある')
+ok('pre_release.py' in dep and 'pre_release.py' in chk and '（任意）自動テスト' not in chk, '公開前の自動テスト（pre_release.py）が必須として書かれている')
+
 print(f'\n{passed + failed} 項目中 {passed} 成功' + ('' if not failed else f'、{failed} 失敗'))
 sys.exit(1 if failed else 0)

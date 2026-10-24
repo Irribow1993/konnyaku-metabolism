@@ -2,10 +2,11 @@
     python3 dev/tests/version_check.py
 公開する版ごとに、次がすべて同じ版でなければ失敗する（食い違ったときは、最も多くの場所に書かれている版を基準にして、違う場所を示す）。
   - 表示の版：public/index.html の id="ver"・id="about-ver"
-  - JS の版：public/js/ui.js の APP_VERSION（v0.2.3 で改名するまでは VERSION）
+  - JS の版：public/js/ui.js の VERSION または APP_VERSION（どちらの名前でもよい）
   - CHANGELOG.md の先頭の版
   - docs/ の最新の MANIFEST（SemVer の数値順）。さらに public/ がその記録と一致すること
   - README.md・docs/RELEASE_CHECKLIST.md・docs/DEPLOY.md・docs/KNOWN_LIMITATIONS.md に書いた版
+開発用の検査（text_lint.js・release_check.py）に版が直書きされていないこと（版は public/index.html から導く）。
 git のタグ v<版> は公開を確認してから作るので、無くても失敗にしない（あれば、指しているコミットを表示する）。"""
 import re, subprocess, sys
 from collections import Counter
@@ -13,7 +14,7 @@ sys.dont_write_bytecode = True
 from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent.parent
 sys.path.insert(0, str(ROOT / 'dev/tools'))
-from verify_manifest import manifests, semver, verify
+from verify_manifest import ManifestError, manifests, semver, verify
 
 def read(p): return (ROOT / p).read_text(encoding='utf-8')
 def one(pattern, text):
@@ -46,9 +47,19 @@ def main():
         if not ok: fails.append(k)
     ms = manifests()
     if ms and found['最新の MANIFEST'] == want:
-        bad, _, _ = verify(ms[-1])
-        print(('  ✔ ' if not bad else '  ✘ ') + f'public/ が {ms[-1].name} と一致' + ('' if not bad else f'（{len(bad)} 件が異なる）'))
-        if bad: fails.append('MANIFEST の照合')
+        try:
+            bad, _, _ = verify(ms[-1])
+            print(('  ✔ ' if not bad else '  ✘ ') + f'public/ が {ms[-1].name} と一致' + ('' if not bad else f'（{len(bad)} 件が異なる）'))
+            if bad: fails.append('MANIFEST の照合')
+        except ManifestError as e:
+            print(f'  ✘ MANIFEST の書式エラー：{e}')
+            fails.append('MANIFEST の書式')
+    # 版を直書きした検査が残っていないか（版上げのたびに書き換え忘れて、公開前の自動テストが失敗する／見逃すのを防ぐ）
+    for f in ('dev/tests/text_lint.js', 'dev/tests/release_check.py'):
+        hard = [i for i, l in enumerate(read(f).splitlines(), 1)
+                if re.search(r'ver"|VERSION|#ver|EXPECTED_VER', l) and re.search(r'v\d+(?:\\?\.\d+){2}', l)]
+        print(('  ✔ ' if not hard else '  ✘ ') + f'{f} に版の直書きが無い' + ('' if not hard else f'（{", ".join(map(str, hard))} 行目）'))
+        if hard: fails.append(f + ' の版の直書き')
     try:
         tag = subprocess.run(['git', 'rev-parse', '--short', f'{want}^{{commit}}'], cwd=ROOT,
                              capture_output=True, text=True).stdout.strip()

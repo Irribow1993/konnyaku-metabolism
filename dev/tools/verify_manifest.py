@@ -1,7 +1,8 @@
 """公開用ビルド（public/）が、記録した版と同じかを確かめる。
     python3 dev/tools/verify_manifest.py          … いちばん新しい版の MANIFEST と照合
     python3 dev/tools/verify_manifest.py v0.2.2   … 版を指定して照合
-docs/MANIFEST_v<版>.sha256 に記録した SHA-256 と、public/ の全ファイルを照合する。"""
+docs/MANIFEST_v<版>.sha256 に記録した SHA-256 と、public/ の全ファイルを照合する。
+終了コード：0＝すべて一致、1＝不一致（または MANIFEST の書式エラー・指定した版が無い）。"""
 import hashlib, re, sys
 from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent.parent
@@ -17,11 +18,30 @@ def manifests():
              if re.fullmatch(r'MANIFEST_v\d+\.\d+\.\d+\.sha256', f.name)]
     return sorted(found, key=lambda f: semver(f.name))
 
-def verify(path):
+class ManifestError(Exception):
+    """MANIFEST の書式が正しくない（トレースバックではなく、どこが悪いかを示すための例外）。"""
+
+def parse(path):
+    """MANIFEST を {public/からのパス: SHA-256} にする。1行は「SHA-256（小文字16進64桁）・空白・public/ で始まるパス」。
+    書式に合わない行・同じパスの重複・1行も無い MANIFEST は ManifestError（行番号つき）。"""
     rec = {}
-    for line in path.read_text(encoding='utf-8').splitlines():
-        if line.strip():
-            h, p = line.split(None, 1); rec[p.strip()] = h
+    for n, line in enumerate(path.read_text(encoding='utf-8').splitlines(), 1):
+        if not line.strip():
+            continue
+        m = re.fullmatch(r'([0-9a-f]{64})\s+(public/\S.*?)\s*', line)
+        if not m:
+            raise ManifestError(f'{path.name} の {n} 行目が書式に合わない'
+                                f'（「SHA-256（小文字16進64桁）・空白・public/ で始まるパス」であること）：{line.strip()[:60]!r}')
+        h, p = m.groups()
+        if p in rec:
+            raise ManifestError(f'{path.name} の {n} 行目：{p} が重複している')
+        rec[p] = h
+    if not rec:
+        raise ManifestError(f'{path.name} に記録が1行も無い')
+    return rec
+
+def verify(path):
+    rec = parse(path)
     now = {str(f.relative_to(ROOT)).replace('\\', '/'): hashlib.sha256(f.read_bytes()).hexdigest()
            for f in sorted((ROOT / 'public').rglob('*')) if f.is_file()}
     return sorted(set([p for p in rec if now.get(p) != rec[p]] + [p for p in now if p not in rec])), rec, now
@@ -34,7 +54,10 @@ if __name__ == '__main__':
     elif all_m: target = all_m[-1]
     else: sys.exit('docs/ に MANIFEST が無い')
     ver = target.name[len('MANIFEST_'):-len('.sha256')]
-    bad, rec, now = verify(target)
+    try:
+        bad, rec, now = verify(target)
+    except ManifestError as e:
+        sys.exit(f'MANIFEST の書式エラー：{e}')
     for p in bad:
         print('  ✘', p, '（変更・追加・削除）' if p in now and p in rec else '（記録にない・見つからない）')
     print(f'すべて一致（{ver} のまま）' if not bad else f'{len(bad)} 件が {ver} の記録と異なる')

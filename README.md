@@ -59,6 +59,7 @@ node dev/tests/v020_tests.js                                 # v0.2.0 の4条件
 node dev/tests/text_lint.js                                  # 表示文言・公開前の静的チェック
 python3 dev/tests/ui_smoke.py public/index.html              # 画面操作（Playwright と Chromium が必要）
 python3 dev/tests/release_check.py http://127.0.0.1:8787/    # 公開時の画面での確認（serve.py を起動してから）
+python3 dev/tests/pre_release.py                             # 公開前の自動テストをまとめて実行（必須。1つでも失敗したら公開しない）
 python3 dev/tests/version_check.py                           # 版のそろい具合（表示・JS・CHANGELOG・MANIFEST・文書）と public/ の照合
 python3 dev/tests/manifest_tests.py                          # MANIFEST の作成・照合と版の検査そのもののテスト
 ```

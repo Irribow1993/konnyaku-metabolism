@@ -11,6 +11,10 @@ import asyncio, json, os, sys, time
 from pathlib import Path
 from playwright.async_api import async_playwright
 
+import re
+# 期待する版は直書きせず、このリポジトリの public/index.html の表示の版（id="ver"）から導く（版上げのたびの書き換え忘れを防ぐ）。
+# 公開サイトがこの版でなければ失敗する
+EXPECTED_VER = re.search(r'id="ver">([^<]+)<', (Path(__file__).resolve().parent.parent.parent / 'public/index.html').read_text(encoding='utf-8')).group(1).strip()
 BASE = sys.argv[1] if len(sys.argv) > 1 else 'http://127.0.0.1:8787/'
 SHOT = sys.argv[2] if len(sys.argv) > 2 else None
 KEY = 'metabolism.save.v1'
@@ -40,7 +44,7 @@ async def main():
         print('[R1] 初回起動（公開時の画面）')
         ctx, pg = await ctx_page()
         await pg.goto(BASE); await pg.wait_for_timeout(900)
-        ok(await pg.title() == 'METABOLISM — 代謝のインクリメンタルゲーム' and (await pg.text_content('#ver')).strip() == 'v0.2.2', 'タイトルとバージョン v0.2.2')
+        ok(await pg.title() == 'METABOLISM — 代謝のインクリメンタルゲーム' and (await pg.text_content('#ver')).strip() == EXPECTED_VER, f'タイトルとバージョン {EXPECTED_VER}')
         ok(await pg.is_visible('#sheet') and '遊び方' in await pg.text_content('#sheet-title'), '初回は「遊び方」が自動で開く')
         body = await pg.text_content('#sheet-body')
         ok(all(k in body for k in ['グルコースを入れる', '研究ポイント', '次の目標', '新しい細胞で再開', '保存', '単純化']), '遊び方：基本の操作・タブ・保存・単純化への案内')

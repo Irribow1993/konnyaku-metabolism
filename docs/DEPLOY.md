@@ -4,10 +4,10 @@ METABOLISM はビルド不要の静的サイトです。`public/` フォルダ�
 
 ## 0. 公開前に決めること
 - [x] 作者名・連絡先・ライセンス（決定済み：こんにゃくお爺さん／note のプロフィール／プログラム GPL-3.0・解説文は CC BY-NC-SA 4.0。[作者名とライセンスの決定.md](作者名とライセンスの決定.md)）
-- [ ] `python3 dev/tools/verify_manifest.py` で、公開用ビルドが記録した版のままか確認（`python3 dev/tests/version_check.py` で版のそろい具合も確認）
+- [ ] **`python3 dev/tests/pre_release.py` が「すべて成功」**（必須。MANIFEST の照合・版のそろい具合・各種の自動テスト・画面操作の試験をまとめて実行する。1つでも失敗したら公開しない）
 - [x] リポジトリは**公開（Public）**にする（決定済み）。作る前に GitHub の設定 →「Emails」→「Keep my email addresses private」を有効にし、コミットに個人のメールアドレスが残らないようにする
 - [x] サイトの名前（`<名前>.pages.dev` になる。決定済み：konnyaku-metabolism）
-  - 共有プレビュー（OGP）の住所は `https://konnyaku-metabolism.pages.dev/` で書いてある。別の名前・独自ドメインにするときは、`public/index.html` の `canonical`・`og:url`・`og:image` の3か所を同じ住所に直し、`docs/MANIFEST_v0.2.1.sha256` を作り直す
+  - 共有プレビュー（OGP）の住所は `https://konnyaku-metabolism.pages.dev/` で書いてある。別の名前・独自ドメインにするときは、`public/index.html` の `canonical`・`og:url`・`og:image` の3か所を同じ住所に直す。公開ファイルが変わるので、**新しい版として公開し**、新しい版の `docs/MANIFEST_v<版>.sha256` を `python3 dev/tools/make_manifest.py v<版>` で作る（過去の版の MANIFEST は書き換えない。「4. 更新するとき」）
 
 ## 1. GitHub にリポジトリを作る
 1. GitHub にログインし、右上の「+」→「New repository」。
@@ -56,12 +56,12 @@ METABOLISM はビルド不要の静的サイトです。`public/` フォルダ�
 ## 4. 更新するとき
 1. ファイルを直して `git commit`・`git push` すると、自動で公開し直される。
 2. 版を上げたときは、次の場所を同じ版にする。
-   - `public/index.html` の `id="ver"`・`id="about-ver"`、`public/js/ui.js` の `VERSION`（v0.2.3 から `APP_VERSION`）
+   - `public/index.html` の `id="ver"`・`id="about-ver"`、`public/js/ui.js` の `VERSION`（`APP_VERSION` に改名してもよい。検査はどちらの名前も読む）
    - `CHANGELOG.md` の先頭の項
    - `README.md` の冒頭、`docs/RELEASE_CHECKLIST.md`・`docs/KNOWN_LIMITATIONS.md` の見出し、この文書の「3. 公開後の確認」の版
-   - `dev/tests/text_lint.js`・`dev/tests/release_check.py` の版の確認
+   - `dev/tests/text_lint.js`・`dev/tests/release_check.py` は、版を `public/index.html` から読むので書き換えは要らない（版を直書きすると `version_check.py` が失敗する）。`ui.js` の版の名前を変えるときは、`text_lint.js`・`version_check.py` の読み取りも同時に直す
    そのあと `python3 dev/tools/make_manifest.py v<版>` で `docs/MANIFEST_v<版>.sha256` を作り、`python3 dev/tests/version_check.py` が「すべて v<版> でそろっている」になることを確かめる。`verify_manifest.py` は最新の版（SemVer の数値順。v0.2.10 は v0.2.9 より新しい）の MANIFEST を自動で選ぶので、書き換えは要らない。過去の版の MANIFEST は書き換えない。
-3. 公開する版ごとに、`APP_VERSION`（上の版の表示）・`CHANGELOG.md`・`docs/MANIFEST_v<版>.sha256`・git のタグ `v<版>` の4つを同じ版にそろえる（v0.2.1 から。タグは公開を確定したときに付ける：`git tag v<版> && git push origin v<版>`、または GitHub の「Releases」→「Draft a new release」でタグを作る）。
+3. 公開する版ごとに、`ui.js` の版（`VERSION`）・`CHANGELOG.md`・`docs/MANIFEST_v<版>.sha256`・git のタグ `v<版>` の4つを同じ版にそろえる（v0.2.1 から。タグは公開を確定したときに付ける：`git tag v<版> && git push origin v<版>`、または GitHub の「Releases」→「Draft a new release」でタグを作る）。
 4. **ファイルを削除するときは、「Add files via upload」ではなく、GitHub の画面でファイルを開いて「Delete file」を使うか、`git rm` を使う**（アップロードでは削除が反映されない。v0.2.0 で `favicon.svg` が残ったのはこのため）。
 5. セーブの形式を変えるときは、`public/js/sim.js` の `SAVE_VERSION` を上げ、移行（MIGRATIONS）を追加する。保存場所の名前（`metabolism.save.v1`）は変えない（変えると、これまでの保存が読めなくなる）。
 
